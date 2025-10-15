@@ -1,4 +1,4 @@
-package xyz.ezsky.anilink.config;
+package xyz.ezsky.anilink.util;
 
 import cn.hutool.core.util.IdUtil;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;

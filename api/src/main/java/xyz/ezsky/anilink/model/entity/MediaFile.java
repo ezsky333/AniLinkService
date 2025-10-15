@@ -1,4 +1,4 @@
-package xyz.ezsky.anilink.entity;
+package xyz.ezsky.anilink.model.entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
@@ -14,7 +14,7 @@ import java.sql.Timestamp;
 })
 public class MediaFile {
     @Id
-    @GenericGenerator(name = "snowflakeId", strategy = "xyz.ezsky.anilink.config.SnowflakeIdGenerator")
+    @GenericGenerator(name = "snowflakeId", strategy = "xyz.ezsky.anilink.util.SnowflakeIdGenerator")
     @GeneratedValue(generator = "snowflakeId")
     private Long id;
 

@@ -3,8 +3,8 @@ package xyz.ezsky.anilink.service;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import xyz.ezsky.anilink.entity.MediaFile;
-import xyz.ezsky.anilink.entity.MediaLibrary;
+import xyz.ezsky.anilink.model.entity.MediaFile;
+import xyz.ezsky.anilink.model.entity.MediaLibrary;
 import xyz.ezsky.anilink.repository.MediaFileRepository;
 import xyz.ezsky.anilink.repository.MediaLibraryRepository;
 

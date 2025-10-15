@@ -1,4 +1,4 @@
-package xyz.ezsky.anilink.entity;
+package xyz.ezsky.anilink.model.entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
@@ -10,7 +10,7 @@ import org.hibernate.annotations.GenericGenerator;
 @Table(name = "media_library")
 public class MediaLibrary {
     @Id
-    @GenericGenerator(name = "snowflakeId", strategy = "xyz.ezsky.anilink.config.SnowflakeIdGenerator")
+    @GenericGenerator(name = "snowflakeId", strategy = "xyz.ezsky.anilink.util.SnowflakeIdGenerator")
     @GeneratedValue(generator = "snowflakeId")
     private Long id;
 

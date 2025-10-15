@@ -1,7 +1,7 @@
 package xyz.ezsky.anilink.repository;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import xyz.ezsky.anilink.entity.MediaLibrary;
+import xyz.ezsky.anilink.repository.base.BaseRepository;
+import xyz.ezsky.anilink.model.entity.MediaLibrary;
 
-public interface MediaLibraryRepository extends JpaRepository<MediaLibrary, Long> {
+public interface MediaLibraryRepository extends BaseRepository<MediaLibrary, Long> {
 }
