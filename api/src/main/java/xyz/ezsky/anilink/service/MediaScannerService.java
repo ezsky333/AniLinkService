@@ -73,7 +73,26 @@ public class MediaScannerService {
             Path libraryPath = Paths.get(library.getPath());
             if (!Files.exists(libraryPath) || !Files.isDirectory(libraryPath)) {
                 log.error("Library path does not exist or is not a directory: {}", library.getPath());
+                // 标记媒体库为错误状态并保存（容错，继续扫描其他库）
+                try {
+                    library.setStatus(MediaLibrary.Status.ERROR);
+                    mediaLibraryRepository.save(library);
+                    log.info("Marked library as ERROR: {}", library.getName());
+                } catch (Exception ex) {
+                    log.error("Failed to mark library status ERROR for {}", library.getName(), ex);
+                }
                 return;
+            }
+
+            // 路径存在：确保状态为 OK
+            try {
+                if (library.getStatus() != MediaLibrary.Status.OK) {
+                    library.setStatus(MediaLibrary.Status.OK);
+                    mediaLibraryRepository.save(library);
+                    log.info("Marked library as OK: {}", library.getName());
+                }
+            } catch (Exception ex) {
+                log.warn("Failed to update library status to OK for {}", library.getName(), ex);
             }
 
             List<MediaFile> existingFiles = mediaFileRepository.findByLibraryId(library.getId());
