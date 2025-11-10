@@ -78,16 +78,16 @@ databaseChangeLog:
             tableName: media_file
             columnNames: library_id, file_path
             constraintName: uc_media_file_library_path
-    - changeSet:
-        id: 3-add-media-library-status-column
-        author: copilot
-        changes:
-          - addColumn:
-              tableName: media_library
-              columns:
-                - column:
-                    name: status
-                    type: VARCHAR(32)
-                    defaultValue: "OK"
-                    constraints:
-                      nullable: false
+  - changeSet:
+      id: 3-add-media-library-status-column
+      author: copilot
+      changes:
+        - addColumn:
+            tableName: media_library
+            columns:
+              - column:
+                  name: status
+                  type: VARCHAR(32)
+                  defaultValue: "OK"
+                  constraints:
+                    nullable: false
