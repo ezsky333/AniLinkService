@@ -22,6 +22,10 @@ const form = ref({
   adminPassword: ''
 })
 
+// 增加 Dandan 字段
+form.value.dandanAppId = ''
+form.value.dandanAppSecret = ''
+
 const nextStep = () => {
   errorMessage.value = ''
 
@@ -62,6 +66,9 @@ const submitInstallation = async () => {
       siteUrl: form.value.siteUrl,
       adminUsername: form.value.adminUsername,
       adminPassword: form.value.adminPassword
+        ,
+        dandanAppId: form.value.dandanAppId,
+        dandanAppSecret: form.value.dandanAppSecret
     })
 
     if (res.data?.code === 200) {

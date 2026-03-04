@@ -15,6 +15,10 @@ const form = ref({
   siteUrl: ''
 })
 
+// Dandan 字段
+form.value.dandanAppId = ''
+form.value.dandanAppSecret = ''
+
 const fetchConfig = async () => {
   loading.value = true
   try {
@@ -23,7 +27,9 @@ const fetchConfig = async () => {
       form.value = {
         siteName: res.data.data.siteName || '',
         siteDescription: res.data.data.siteDescription || '',
-        siteUrl: res.data.data.siteUrl || ''
+        siteUrl: res.data.data.siteUrl || '',
+        dandanAppId: res.data.data.dandanAppId || '',
+        dandanAppSecret: res.data.data.dandanAppSecret || ''
       }
     }
   } catch (error) {
@@ -49,6 +55,9 @@ const saveConfig = async () => {
       siteName: form.value.siteName,
       siteDescription: form.value.siteDescription,
       siteUrl: form.value.siteUrl
+        ,
+        dandanAppId: form.value.dandanAppId,
+        dandanAppSecret: form.value.dandanAppSecret
     })
 
     if (res.data?.code === 200) {
@@ -112,6 +121,29 @@ onMounted(() => {
             variant="outlined"
             color="primary"
             required
+          />
+
+          <v-divider class="my-4" />
+
+          <h3 class="text-h6 mb-4 text-primary font-weight-medium">
+            <v-icon start color="primary">mdi-shield-key</v-icon>
+            Dandan 配置（可选）
+          </h3>
+          <v-text-field
+            v-model="form.dandanAppId"
+            label="Dandan App ID"
+            prepend-inner-icon="mdi-account-key"
+            variant="outlined"
+            color="primary"
+            class="mb-4"
+          />
+          <v-text-field
+            v-model="form.dandanAppSecret"
+            label="Dandan App Secret"
+            type="password"
+            prepend-inner-icon="mdi-lock"
+            variant="outlined"
+            color="primary"
           />
         </v-form>
       </v-card-text>

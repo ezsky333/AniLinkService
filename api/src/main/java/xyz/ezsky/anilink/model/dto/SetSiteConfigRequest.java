@@ -28,4 +28,10 @@ public class SetSiteConfigRequest {
     
     @Schema(description = "管理员密码", example = "123456")
     private String adminPassword;
+
+    @Schema(description = "Dandan 应用 ID", example = "your_app_id")
+    private String dandanAppId;
+
+    @Schema(description = "Dandan 应用密钥", example = "your_app_secret")
+    private String dandanAppSecret;
 }
