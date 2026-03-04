@@ -1,14 +1,16 @@
 package xyz.ezsky.anilink.util;
 
-import org.springframework.http.*;
+import com.alibaba.fastjson.JSON;
+import lombok.extern.log4j.Log4j2;
+import okhttp3.*;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
 import xyz.ezsky.anilink.service.SiteConfigService;
 
 import java.util.Date;
-import java.time.Instant;
-
-import lombok.extern.log4j.Log4j2;
+import java.io.IOException;
 
 /**
  * 通用 Dandan 客户端工具类，负责签名并发起请求。
@@ -18,44 +20,64 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class DandanClientUtil {
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final OkHttpClient okHttpClient = new OkHttpClient();
     private final SiteConfigService siteConfigService;
 
     public DandanClientUtil(SiteConfigService siteConfigService) {
         this.siteConfigService = siteConfigService;
     }
 
-    private HttpHeaders buildHeaders(String path) {
+    private Headers buildHeaders(String path) {
         String appId = siteConfigService.getDandanAppId();
         String appSecret = siteConfigService.getDandanAppSecret();
         long timestamp = new Date().getTime() / 1000;
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
+        Headers.Builder headersBuilder = new Headers.Builder();
+        headersBuilder.add("Content-Type", "application/json");
         if (appId != null && appSecret != null) {
             String signature = DandanSignatureGenerator.generateSignature(appId, timestamp, path, appSecret);
-            headers.set("X-AppId", appId);
-            headers.set("X-Timestamp", String.valueOf(timestamp));
-            headers.set("X-Signature", signature);
+            headersBuilder.add("X-AppId", appId);
+            headersBuilder.add("X-Timestamp", String.valueOf(timestamp));
+            headersBuilder.add("X-Signature", signature);
         }
-        return headers;
+        return headersBuilder.build();
     }
 
     public ResponseEntity<String> get(String baseUrl, String path) {
         String url = combine(baseUrl, path);
-        HttpEntity<Void> entity = new HttpEntity<>(buildHeaders(path));
-        ResponseEntity<String> resp = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
-        log.debug("GET {} returned {}", url, resp.getStatusCode());
-        return resp;
+        Request request = new Request.Builder()
+                .url(url)
+                .headers(buildHeaders(path))
+                .get()
+                .build();
+        try (Response response = okHttpClient.newCall(request).execute()) {
+            String body = response.body() != null ? response.body().string() : "";
+            log.debug("GET {} returned {}", url, response.code());
+            return new ResponseEntity<>(body, HttpStatus.valueOf(response.code()));
+        } catch (IOException e) {
+            log.error("GET request failed for {}", url, e);
+            throw new RuntimeException(e);
+        }
     }
 
     public ResponseEntity<String> post(String baseUrl, String path, Object body) {
         log.debug("Preparing POST request to {} with body: {}", path, body);
         String url = combine(baseUrl, path);
-        HttpEntity<Object> entity = new HttpEntity<>(body, buildHeaders(path));
-        ResponseEntity<String> resp = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
-        log.debug("POST {} returned {}", url, resp.getStatusCode());
-        return resp;
+        String jsonBody = JSON.toJSONString(body);
+        RequestBody requestBody = RequestBody.create(jsonBody, MediaType.parse("application/json"));
+        Request request = new Request.Builder()
+                .url(url)
+                .headers(buildHeaders(path))
+                .post(requestBody)
+                .build();
+        try (Response response = okHttpClient.newCall(request).execute()) {
+            String responseBody = response.body() != null ? response.body().string() : "";
+            log.debug("POST {} returned {}", url, response.code());
+            return new ResponseEntity<>(responseBody, HttpStatus.valueOf(response.code()));
+        } catch (IOException e) {
+            log.error("POST request failed for {}", url, e);
+            throw new RuntimeException(e);
+        }
     }
 
     private String combine(String base, String path) {

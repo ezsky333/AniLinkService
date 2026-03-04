@@ -52,15 +52,14 @@ public class DandanMatchService {
         try {
             Map<String, Object> item = new HashMap<>();
             if (fileName != null) item.put("fileName", fileName);
-            if (hash != null) item.put("hash", hash);
+            if (hash != null) item.put("fileHash", hash);
             if (fileSize != null) item.put("fileSize", fileSize);
+            item.put("matchMode","hashAndFileName");
             log.debug("Querying Dandan with: {}", item);
-            // 很多实现使用数组或 list 字段，这里直接传数组根体（server 端兼容多种格式）
-            Object body = new Object[] { item };
 
             ResponseEntity<String> resp;
             try {
-                resp = client.post(DANDAN_BASE, "/api/v2/match/batch", body);
+                resp = client.post(DANDAN_BASE, "/api/v2/match", item);
             } catch (Exception e) {
                 log.error("Dandan batch match call failed", e);
                 return null;
