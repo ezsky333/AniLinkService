@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createVuetify } from 'vuetify'
 import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
+import { zhHans } from 'vuetify/locale'
 import 'vuetify/styles'
 import '@mdi/font/css/materialdesignicons.css'
 import router from './router'
@@ -12,6 +13,12 @@ import { md3 } from 'vuetify/blueprints'
 const vuetify = createVuetify({
   components,
   directives,
+  locale: {
+    locale: 'zh-Hans',
+    messages: {
+      'zh-Hans': zhHans,
+    },
+  },
   theme: {
     defaultTheme: 'light',
   },

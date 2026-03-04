@@ -95,28 +95,112 @@ public class DandanMatchService {
 
                                 try {
                                     JsonNode detailNode = objectMapper.readTree(detailJson);
-                                    // 提取常用字段
-                                    anime.setTitle(extractFirstText(detailNode, "title", "name"));
-                                    anime.setAltTitle(extractFirstText(detailNode, "altTitle", "alias", "names"));
-                                    anime.setYear(parseInteger(extractFirstText(detailNode, "year", "publishYear")));
-                                    anime.setEpisodes(parseInteger(extractFirstText(detailNode, "episodes", "epCount", "episodeCount")));
-                                    String imageUrl = extractFirstText(detailNode, "imageUrl", "image", "cover", "poster", "coverImage", "images");
-                                    anime.setImageUrl(imageUrl);
+                                    JsonNode bangumi = detailNode.get("bangumi");
+                                    if (bangumi != null && !bangumi.isNull()) {
+                                        // 提取标题：从 titles 数组中获取
+                                        String mainTitle = null;
+                                        String altTitle = null;
+                                        JsonNode titles = bangumi.get("titles");
+                                        if (titles != null && titles.isArray()) {
+                                            for (JsonNode titleObj : titles) {
+                                                String lang = titleObj.get("language") != null ? titleObj.get("language").asText() : "";
+                                                String title = titleObj.get("title") != null ? titleObj.get("title").asText() : "";
+                                                if (lang.equals("主标题") && mainTitle == null) {
+                                                    mainTitle = title;
+                                                } else if ((lang.contains("简体中文") || lang.contains("中文")) && altTitle == null) {
+                                                    altTitle = title;
+                                                }
+                                            }
+                                        }
+                                        anime.setTitle(mainTitle != null ? mainTitle : extractFirstText(bangumi, "animeTitle", "name"));
+                                        if (altTitle != null) {
+                                            anime.setAltTitle(altTitle);
+                                        }
+                                        
+                                        // 提取集数：从 episodes 数组的长度
+                                        JsonNode episodes = bangumi.get("episodes");
+                                        if (episodes != null && episodes.isArray()) {
+                                            anime.setEpisodes(episodes.size());
+                                        }
+                                        
+                                        // 提取年份和其他信息：从 metadata 数组中解析
+                                        JsonNode metadata = bangumi.get("metadata");
+                                        if (metadata != null && metadata.isArray()) {
+                                            for (JsonNode meta : metadata) {
+                                                if (meta.isTextual()) {
+                                                    String metaStr = meta.asText();
+                                                    // 提取年份（保存原始内容）
+                                                    if (metaStr.startsWith("上映年度:") && anime.getYear() == null) {
+                                                        anime.setYear(metaStr.replaceAll("上映年度:", "").trim());
+                                                    }
+                                                    // 提取片长
+                                                    if ((metaStr.startsWith("片长:") || metaStr.startsWith("时长:")) && anime.getDuration() == null) {
+                                                        anime.setDuration(metaStr.replaceAll("片长:|时长:", "").trim());
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        
+                                        anime.setType(extractFirstText(bangumi, "typeDescription", "type"));
+                                        
+                                        // 提取简介
+                                        JsonNode summary = bangumi.get("summary");
+                                        if (summary != null && summary.isTextual()) {
+                                            anime.setSummary(summary.asText());
+                                        }
+                                        
+                                        // 提取标签（最多前10个）
+                                        JsonNode tags = bangumi.get("tags");
+                                        if (tags != null && tags.isArray()) {
+                                            StringBuilder tagStr = new StringBuilder();
+                                            int count = 0;
+                                            for (JsonNode tag : tags) {
+                                                if (count >= 10) break;
+                                                if (tagStr.length() > 0) tagStr.append(",");
+                                                tagStr.append(extractFirstText(tag, "name", "title"));
+                                                count++;
+                                            }
+                                            if (tagStr.length() > 0) {
+                                                anime.setTags(tagStr.toString());
+                                            }
+                                        }
+                                        
+                                        // 提取评分
+                                        JsonNode ratingDetails = bangumi.get("ratingDetails");
+                                        if (ratingDetails != null && ratingDetails.isObject()) {
+                                            JsonNode rating = ratingDetails.get("弹弹play完结后评分");
+                                            if (rating == null) rating = ratingDetails.get("弹弹play连载中评分");
+                                            if (rating != null && rating.isNumber()) {
+                                                anime.setRating(rating.asDouble());
+                                            }
+                                        }
+                                        
+                                        String imageUrl = extractFirstText(bangumi, "imageUrl", "image", "cover", "poster", "coverImage", "images");
+                                        anime.setImageUrl(imageUrl);
+                                    } else {
+                                        // 如果没有 bangumi 节点，直接从顶层提取
+                                        anime.setTitle(extractFirstText(detailNode, "title", "name"));
+                                        anime.setAltTitle(extractFirstText(detailNode, "altTitle", "alias", "names"));
+                                        anime.setYear(extractFirstText(detailNode, "year", "publishYear"));
+                                        anime.setEpisodes(parseInteger(extractFirstText(detailNode, "episodes", "epCount", "episodeCount")));
+                                        String imageUrl = extractFirstText(detailNode, "imageUrl", "image", "cover", "poster", "coverImage", "images");
+                                        anime.setImageUrl(imageUrl);
+                                    }
 
                                     // 确保图片目录存在
-                                    if (StringUtils.hasText(imageUrl)) {
+                                    if (StringUtils.hasText(anime.getImageUrl())) {
                                         try {
                                             Files.createDirectories(Paths.get(imageDir));
                                             // 下载图片
-                                            ResponseEntity<byte[]> imgResp = rest.getForEntity(new URI(imageUrl), byte[].class);
+                                            ResponseEntity<byte[]> imgResp = rest.getForEntity(new URI(anime.getImageUrl()), byte[].class);
                                             if (imgResp.getStatusCode().is2xxSuccessful() && imgResp.getBody() != null) {
-                                                String ext = guessExtension(imageUrl, imgResp.getHeaders().getContentType() != null ? imgResp.getHeaders().getContentType().getSubtype() : null);
+                                                String ext = guessExtension(anime.getImageUrl(), imgResp.getHeaders().getContentType() != null ? imgResp.getHeaders().getContentType().getSubtype() : null);
                                                 String imageFileName = "dandan_" + aid + (ext != null ? ext : "");
                                                 File out = Paths.get(imageDir, imageFileName).toFile();
                                                 try (FileOutputStream fos = new FileOutputStream(out)) {
                                                     fos.write(imgResp.getBody());
                                                 }
-                                                anime.setLocalImagePath(out.getAbsolutePath());
+                                                anime.setLocalImagePath(out.getName());
                                             }
                                         } catch (Exception ignored) {
                                         }

@@ -12,6 +12,9 @@ databaseChangeLog:
       file: common/db.changelog-site-config-init.yaml
       relativeToChangelogFile: true
   - include:
+      file: common/db.changelog-anime-init.yaml
+      relativeToChangelogFile: true
+  - include:
       file: common/db.changelog-media-metadata.yaml
       relativeToChangelogFile: true
   - include:
@@ -19,5 +22,4 @@ databaseChangeLog:
       relativeToChangelogFile: true
   - include:
       file: pgsql/db.changelog-pgsql-init.yaml
-      relativeToChangelogFile: true
       relativeToChangelogFile: true

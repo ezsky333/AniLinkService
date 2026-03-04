@@ -1,0 +1,107 @@
+databaseChangeLog:
+  - changeSet:
+      id: create-anime-table
+      author: anilink
+      description: "Create anime table with all columns"
+      changes:
+        - createTable:
+            tableName: anime
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: anime_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uc_anime_id
+              - column:
+                  name: title
+                  type: VARCHAR(500)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: alt_title
+                  type: VARCHAR(1000)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: release_year
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: true
+                  remarks: "上映年度"
+              - column:
+                  name: episodes
+                  type: INT
+                  constraints:
+                    nullable: true
+              - column:
+                  name: image_url
+                  type: VARCHAR(1000)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: local_image_path
+                  type: VARCHAR(2000)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: type
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: true
+                  remarks: "动漫类型（TV/电影/OVA等）"
+              - column:
+                  name: duration
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: true
+                  remarks: "时长或片长"
+              - column:
+                  name: summary
+                  type: TEXT
+                  constraints:
+                    nullable: true
+                  remarks: "动漫简介"
+              - column:
+                  name: tags
+                  type: TEXT
+                  constraints:
+                    nullable: true
+                  remarks: "标签列表（逗号分隔）"
+              - column:
+                  name: rating
+                  type: DOUBLE
+                  constraints:
+                    nullable: true
+                  remarks: "评分"
+              - column:
+                  name: raw_json
+                  type: TEXT
+                  constraints:
+                    nullable: true
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+        - createIndex:
+            tableName: anime
+            indexName: idx_anime_animeid
+            columns:
+              - column:
+                  name: anime_id

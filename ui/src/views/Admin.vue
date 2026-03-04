@@ -13,11 +13,13 @@ const SystemInfo = defineAsyncComponent(() => import('./admin/SystemInfo.vue'))
 const SiteConfig = defineAsyncComponent(() => import('./admin/SiteConfig.vue'))
 const MediaLibrary = defineAsyncComponent(() => import('./admin/MediaLibrary.vue'))
 const VideoFileManager = defineAsyncComponent(() => import('./admin/VideoFileManager.vue'))
+const AnimeLibrary = defineAsyncComponent(() => import('./admin/AnimeLibrary.vue'))
 
 const menuItems = [
   { id: 'system', title: '系统信息', icon: 'mdi-information', component: SystemInfo },
   { id: 'site', title: '站点配置', icon: 'mdi-web', component: SiteConfig },
   { id: 'media', title: '媒体库配置', icon: 'mdi-folder-multiple', component: MediaLibrary },
+  { id: 'anime', title: '动漫库管理', icon: 'mdi-library', component: AnimeLibrary },
   { id: 'files', title: '视频文件管理', icon: 'mdi-file-video', component: VideoFileManager }
 ]
 

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import axios from 'axios'
 
 const API_BASE = '/api'
@@ -12,17 +12,8 @@ const errorMessage = ref('')
 const successMessage = ref('')
 const selectedLibraryId = ref(null)
 const mediaLibraries = ref([])
-// pagination
-const page = ref(1)
-const pageSize = ref(20)
-const totalElements = ref(0)
 const queueStatus = ref(null)
 const reprocessingLibraryId = ref(null)
-
-// computed total pages
-const pageCount = computed(() => {
-  return Math.ceil(totalElements.value / pageSize.value) || 1
-})
 
 const selectedFile = ref(null)
 const editingFile = ref({
@@ -57,21 +48,14 @@ const fetchLibraries = async () => {
 const fetchMediaFiles = async () => {
   loading.value = true
   try {
-    const params = {
-      page: page.value - 1,
-      pageSize: pageSize.value
-    }
+    const params = {}
     if (selectedLibraryId.value) {
       params.libraryId = selectedLibraryId.value
     }
 
     const res = await axios.get(`${API_BASE}/media-files`, { params })
     if (res.data?.code === 200 && res.data?.data) {
-      const data = res.data.data
-      mediaFiles.value = data.content || []
-      totalElements.value = data.totalElements
-      // synchronize page (server returns zero-based)
-      page.value = data.currentPage + 1
+      mediaFiles.value = res.data.data.content || []
     }
   } catch (error) {
     console.error('获取媒体文件失败:', error)
@@ -212,36 +196,15 @@ const getResolution = (file) => {
   return '-'
 }
 
-// 分页变化
-const handlePageChange = (newPage) => {
-  page.value = newPage
-  fetchMediaFiles()
-}
-
-const handlePageSizeChange = (size) => {
-  pageSize.value = size
-  page.value = 1
-  fetchMediaFiles()
-}
-
 // 库选择变化
 const handleLibraryChange = () => {
-  page.value = 1
   fetchMediaFiles()
-}
-
-// 定时刷新队列状态
-const startQueueStatusPolling = () => {
-  fetchQueueStatus()
-  setInterval(() => {
-    fetchQueueStatus()
-  }, 3000)
 }
 
 onMounted(() => {
   fetchLibraries()
   fetchMediaFiles()
-  startQueueStatusPolling()
+  fetchQueueStatus()
 })
 </script>
 
@@ -300,11 +263,9 @@ onMounted(() => {
     <!-- 文件列表 -->
     <v-card>
       <v-data-table
-        v-model:page="page"
         :headers="headers"
         :items="mediaFiles"
         :loading="loading"
-        :items-per-page="pageSize"
         density="compact"
         class="elevation-0"
       >
@@ -373,25 +334,6 @@ onMounted(() => {
           <div class="text-center py-8">
             <v-icon size="64" color="grey-lighten-1">mdi-file-video-outline</v-icon>
             <p class="text-body-1 mt-4 text-grey">暂无视频文件</p>
-          </div>
-        </template>
-
-        <template v-slot:bottom>
-          <div class="d-flex align-center justify-center gap-4 py-2">
-            <v-select
-              v-model="pageSize"
-              :items="[10, 20, 50, 100]"
-              label="每页数量"
-              variant="outlined"
-              density="compact"
-              style="max-width: 150px"
-              @update:model-value="handlePageSizeChange"
-            />
-            <span class="text-caption text-grey">共 {{ totalElements }} 条记录</span>
-            <v-pagination
-              v-model="page"
-              :length="pageCount"
-            ></v-pagination>
           </div>
         </template>
       </v-data-table>

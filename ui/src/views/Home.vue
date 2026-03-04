@@ -223,6 +223,7 @@ onMounted(() => {
               color="primary"
               required
               class="mb-4"
+              @keyup.enter="handleLogin"
             />
             <v-text-field
               v-model="loginForm.password"
@@ -232,6 +233,7 @@ onMounted(() => {
               variant="outlined"
               color="primary"
               required
+              @keyup.enter="handleLogin"
             />
           </v-form>
         </v-card-text>
@@ -264,6 +266,6 @@ onMounted(() => {
 
 <style scoped>
 .fill-height {
-  min-height: 100vh;
+  height: 100%;
 }
 </style>

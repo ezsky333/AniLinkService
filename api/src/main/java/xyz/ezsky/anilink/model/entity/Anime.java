@@ -25,8 +25,8 @@ public class Anime {
     @Column(name = "alt_title", length = 1000)
     private String altTitle;
 
-    @Column(name = "year")
-    private Integer year;
+    @Column(name = "release_year", length = 100)
+    private String year;
 
     @Column(name = "episodes")
     private Integer episodes;
@@ -36,6 +36,23 @@ public class Anime {
 
     @Column(name = "local_image_path", length = 2000)
     private String localImagePath;
+
+    @Column(name = "type", length = 100)
+    private String type;
+
+    @Column(name = "duration", length = 50)
+    private String duration;
+
+    @Lob
+    @Column(name = "summary", columnDefinition = "TEXT")
+    private String summary;
+
+    @Lob
+    @Column(name = "tags", columnDefinition = "TEXT")
+    private String tags;
+
+    @Column(name = "rating")
+    private Double rating;
 
     @Lob
     @Column(name = "raw_json", columnDefinition = "TEXT")
