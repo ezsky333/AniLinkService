@@ -25,4 +25,10 @@ public class SiteConfigVO {
     
     @Schema(description = "是否已安装", example = "true")
     private boolean installed;
+
+    @Schema(description = "Dandan 应用 ID", example = "your_app_id")
+    private String dandanAppId;
+
+    @Schema(description = "Dandan 应用密钥，返回时会被原样返回（注意安全风险）", example = "your_app_secret")
+    private String dandanAppSecret;
 }

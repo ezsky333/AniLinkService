@@ -22,4 +22,10 @@ public class UpdateSiteConfigRequest {
     
     @Schema(description = "站点URL", example = "http://localhost:8081")
     private String siteUrl;
+
+    @Schema(description = "Dandan 应用 ID", example = "your_app_id")
+    private String dandanAppId;
+
+    @Schema(description = "Dandan 应用密钥", example = "your_app_secret")
+    private String dandanAppSecret;
 }

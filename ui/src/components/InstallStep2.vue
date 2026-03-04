@@ -58,6 +58,35 @@ const updateField = (field, value) => {
 
     <v-divider class="my-4" />
 
+    <!-- Dandan 配置 -->
+    <div class="mb-6">
+      <h3 class="text-h6 mb-4 text-primary font-weight-medium">
+        <v-icon start color="primary">mdi-shield-key</v-icon>
+        Dandan 配置（可选）
+      </h3>
+      <v-text-field
+        :model-value="form.dandanAppId"
+        @update:model-value="updateField('dandanAppId', $event)"
+        label="Dandan App ID"
+        placeholder="例如：your_app_id"
+        prepend-inner-icon="mdi-account-key"
+        variant="outlined"
+        color="primary"
+      />
+      <v-text-field
+        :model-value="form.dandanAppSecret"
+        @update:model-value="updateField('dandanAppSecret', $event)"
+        label="Dandan App Secret"
+        type="password"
+        placeholder="例如：your_app_secret"
+        prepend-inner-icon="mdi-lock"
+        variant="outlined"
+        color="primary"
+      />
+    </div>
+
+    <v-divider class="my-4" />
+
     <!-- 管理员账号 -->
     <div class="mb-6">
       <h3 class="text-h6 mb-4 text-primary font-weight-medium">

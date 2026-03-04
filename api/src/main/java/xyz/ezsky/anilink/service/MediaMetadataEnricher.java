@@ -34,6 +34,9 @@ public class MediaMetadataEnricher {
     @Autowired
     private MediaFileRepository mediaFileRepository;
 
+    @Autowired
+    private DandanMatchService dandanMatchService;
+
     /**
      * 异步提取并补充媒体文件的完整元数据
      * 
@@ -153,6 +156,37 @@ public class MediaMetadataEnricher {
         // 3. 缓存查询结果以避免重复请求
         
         log.debug("Hook point for external metadata enrichment: {}", mediaFile.getFilePath());
+
+        try {
+            // 优先使用已计算的文件哈希进行匹配
+            String hash = mediaFile.getHash();
+            String fileName = mediaFile.getFileName();
+            Long fileSize = mediaFile.getSize();
+
+            if (hash == null && (fileName == null || fileName.isEmpty())) {
+                // 没有可用信息，跳过
+                return;
+            }
+
+            // 调用弹弹匹配服务
+            xyz.ezsky.anilink.model.dto.AnimeInfo animeInfo = dandanMatchService.queryByFile(fileName, hash, fileSize);
+            if (animeInfo != null) {
+                mediaFile.setEpisodeId(animeInfo.getEpisodeId());
+                mediaFile.setAnimeId(animeInfo.getAnimeId());
+                mediaFile.setAnimeTitle(animeInfo.getAnimeTitle());
+                mediaFile.setEpisodeTitle(animeInfo.getEpisodeTitle());
+
+                // 立刻持久化匹配结果，避免丢失
+                try {
+                    mediaFileRepository.save(mediaFile);
+                    log.info("External match found and saved for file {} -> episodeId={}", mediaFile.getFilePath(), animeInfo.getEpisodeId());
+                } catch (Exception e) {
+                    log.error("Failed to save media file after external match for {}", mediaFile.getFilePath(), e);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error while enriching external metadata for {}", mediaFile.getFilePath(), e);
+        }
     }
 
     /**

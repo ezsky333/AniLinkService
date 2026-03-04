@@ -32,6 +32,12 @@ public class SiteConfigService {
     private static final String SITE_DESCRIPTION = "site_description";
     private static final String SITE_URL = "site_url";
     private static final String INSTALLED = "installed";
+    private static final String DANDAN_APP_ID = "dandan_app_id";
+    private static final String DANDAN_APP_SECRET = "dandan_app_secret";
+
+    // 简单内存缓存，避免每次请求都访问数据库
+    private volatile String cachedDandanAppId;
+    private volatile String cachedDandanAppSecret;
     
     /**
      * 获取站点配置
@@ -54,6 +60,12 @@ public class SiteConfigService {
         // 检查是否已安装
         Optional<SiteConfig> installedConfig = siteConfigRepository.findByConfigKey(INSTALLED);
         vo.setInstalled(installedConfig.isPresent() && "true".equals(installedConfig.get().getConfigValue()));
+
+        // Dandan 配置
+        siteConfigRepository.findByConfigKey(DANDAN_APP_ID)
+            .ifPresent(config -> vo.setDandanAppId(config.getConfigValue()));
+        siteConfigRepository.findByConfigKey(DANDAN_APP_SECRET)
+            .ifPresent(config -> vo.setDandanAppSecret(config.getConfigValue()));
         
         return vo;
     }
@@ -76,6 +88,16 @@ public class SiteConfigService {
         
         // 创建管理员账号
         userService.createAdminUser(request.getAdminUsername(), request.getAdminPassword(), "example@example.com");
+
+        // Dandan 配置（可选）
+        if (request.getDandanAppId() != null) {
+            saveOrUpdateConfig(DANDAN_APP_ID, request.getDandanAppId(), "Dandan 应用 ID");
+            cachedDandanAppId = request.getDandanAppId();
+        }
+        if (request.getDandanAppSecret() != null) {
+            saveOrUpdateConfig(DANDAN_APP_SECRET, request.getDandanAppSecret(), "Dandan 应用密钥");
+            cachedDandanAppSecret = request.getDandanAppSecret();
+        }
     }
     
     /**
@@ -90,6 +112,14 @@ public class SiteConfigService {
         }
         if (request.getSiteUrl() != null) {
             saveOrUpdateConfig(SITE_URL, request.getSiteUrl(), "站点URL");
+        }
+        if (request.getDandanAppId() != null) {
+            saveOrUpdateConfig(DANDAN_APP_ID, request.getDandanAppId(), "Dandan 应用 ID");
+            cachedDandanAppId = request.getDandanAppId();
+        }
+        if (request.getDandanAppSecret() != null) {
+            saveOrUpdateConfig(DANDAN_APP_SECRET, request.getDandanAppSecret(), "Dandan 应用密钥");
+            cachedDandanAppSecret = request.getDandanAppSecret();
         }
     }
     
@@ -112,6 +142,38 @@ public class SiteConfigService {
             config.setDescription(description);
             siteConfigRepository.save(config);
         }
+    }
+
+    /**
+     * 获取缓存的 Dandan AppId，如果缓存为空则从数据库加载
+     */
+    public String getDandanAppId() {
+        if (cachedDandanAppId == null) {
+            synchronized (this) {
+                if (cachedDandanAppId == null) {
+                    cachedDandanAppId = siteConfigRepository.findByConfigKey(DANDAN_APP_ID)
+                        .map(SiteConfig::getConfigValue)
+                        .orElse(null);
+                }
+            }
+        }
+        return cachedDandanAppId;
+    }
+
+    /**
+     * 获取缓存的 Dandan AppSecret，如果缓存为空则从数据库加载
+     */
+    public String getDandanAppSecret() {
+        if (cachedDandanAppSecret == null) {
+            synchronized (this) {
+                if (cachedDandanAppSecret == null) {
+                    cachedDandanAppSecret = siteConfigRepository.findByConfigKey(DANDAN_APP_SECRET)
+                        .map(SiteConfig::getConfigValue)
+                        .orElse(null);
+                }
+            }
+        }
+        return cachedDandanAppSecret;
     }
     
     /**
