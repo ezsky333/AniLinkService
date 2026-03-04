@@ -45,6 +45,12 @@ public class MediaScannerService {
     @Autowired
     private MediaFileRepository mediaFileRepository;
 
+    @Autowired
+    private MediaMetadataEnricher mediaMetadataEnricher;
+
+    @Autowired
+    private MediaMetadataQueueManager metadataQueueManager;
+
     private final ExecutorService executorService = Executors.newFixedThreadPool(4);
     private final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
     private final Map<Path, ScheduledFuture<?>> scheduledTasks = new ConcurrentHashMap<>();
@@ -126,6 +132,9 @@ public class MediaScannerService {
 
     /**
      * 处理单个文件：如果已存在则比较并更新元数据，否则新增记录。
+     * 
+     * 基础信息（文件路径、大小、修改时间）直接保存。
+     * 完整的技术元数据（分辨率、编码等）通过异步队列在后台处理。
      *
      * @param library          所属的媒体库实体
      * @param file             要处理的文件路径
@@ -140,8 +149,13 @@ public class MediaScannerService {
             if (existingFile.getLastModified() != attrs.lastModifiedTime().toMillis() || existingFile.getSize() != attrs.size()) {
                 existingFile.setLastModified(attrs.lastModifiedTime().toMillis());
                 existingFile.setSize(attrs.size());
+                // 重置元数据提取标志，以便重新提取
+                existingFile.setMetadataFetched(false);
                 mediaFileRepository.save(existingFile);
                 log.info("Updated file: {}", filePath);
+                
+                // 提交异步元数据提取任务
+                mediaMetadataEnricher.enrichMediaFileAsync(existingFile, metadataQueueManager);
             }
         } else {
             MediaFile newMediaFile = new MediaFile();
@@ -150,8 +164,12 @@ public class MediaScannerService {
             newMediaFile.setFileName(file.getFileName().toString());
             newMediaFile.setLastModified(attrs.lastModifiedTime().toMillis());
             newMediaFile.setSize(attrs.size());
+            newMediaFile.setMetadataFetched(false);  // 标记待提取元数据
             mediaFileRepository.save(newMediaFile);
             log.info("Added new file: {}", filePath);
+            
+            // 提交异步元数据提取任务
+            mediaMetadataEnricher.enrichMediaFileAsync(newMediaFile, metadataQueueManager);
         }
     }
 
@@ -226,6 +244,8 @@ public class MediaScannerService {
     /**
      * 对文件变更进行延迟处理：如果在延迟期间出现新的变更事件，会取消之前的计划并重新计时，
      * 以实现去抖（debounce）效果，避免重复处理短时间内的多个文件事件。
+     * 
+     * 延迟处理完成后，提交异步元数据提取任务。
      *
      * @param library 所属媒体库
      * @param file    要处理的文件路径
