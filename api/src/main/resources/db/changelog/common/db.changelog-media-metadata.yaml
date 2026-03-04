@@ -1,0 +1,142 @@
+databaseChangeLog:
+  - changeSet:
+      id: add-metadata-columns-to-media-file
+      author: anilink
+      description: "Add metadata columns for media file analysis (FFprobe and MD5 hash)"
+      changes:
+        - addColumn:
+            tableName: media_file
+            columns:
+              # 外部接口获取的字段
+              - column:
+                  name: episode_id
+                  type: varchar(255)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: anime_id
+                  type: bigint
+                  constraints:
+                    nullable: true
+              - column:
+                  name: anime_title
+                  type: varchar(500)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: episode_title
+                  type: varchar(500)
+                  constraints:
+                    nullable: true
+              
+              # FFprobe 提取的基础字段
+              - column:
+                  name: duration
+                  type: bigint
+                  constraints:
+                    nullable: true
+                  remarks: "视频时长，单位毫秒"
+              - column:
+                  name: hash
+                  type: varchar(32)
+                  constraints:
+                    nullable: true
+                  remarks: "文件前16MB的MD5哈希值"
+              
+              # 视频分辨率和宽高比
+              - column:
+                  name: width
+                  type: int
+                  constraints:
+                    nullable: true
+                  remarks: "视频宽度（像素）"
+              - column:
+                  name: height
+                  type: int
+                  constraints:
+                    nullable: true
+                  remarks: "视频高度（像素）"
+              - column:
+                  name: aspect_ratio
+                  type: varchar(20)
+                  constraints:
+                    nullable: true
+                  remarks: "宽高比（如 16:9, 21:9）"
+              
+              # 色彩信息
+              - column:
+                  name: color_depth
+                  type: varchar(50)
+                  constraints:
+                    nullable: true
+                  remarks: "色彩深度（8-bit, 10-bit 等）"
+              - column:
+                  name: hdr_type
+                  type: varchar(50)
+                  constraints:
+                    nullable: true
+                  remarks: "HDR类型（HDR10, HDR10+, Dolby Vision, HLG）"
+              - column:
+                  name: color_space
+                  type: varchar(50)
+                  constraints:
+                    nullable: true
+                  remarks: "色彩空间（Rec.709, Rec.2020 等）"
+              - column:
+                  name: color_primaries
+                  type: varchar(50)
+                  constraints:
+                    nullable: true
+                  remarks: "色彩原色（PQ, HLG 等）"
+              
+              # 编码和帧率信息
+              - column:
+                  name: fps
+                  type: float
+                  constraints:
+                    nullable: true
+                  remarks: "帧率（如 23.976, 24, 25, 29.97 等）"
+              - column:
+                  name: video_bitrate
+                  type: bigint
+                  constraints:
+                    nullable: true
+                  remarks: "视频比特率（比特/秒）"
+              - column:
+                  name: video_codec
+                  type: varchar(100)
+                  constraints:
+                    nullable: true
+                  remarks: "视频编码格式（h264, hevc, av1 等）"
+              - column:
+                  name: audio_codec
+                  type: varchar(100)
+                  constraints:
+                    nullable: true
+                  remarks: "音频编码格式（aac, flac, opus 等）"
+              
+              # 容器格式
+              - column:
+                  name: container_format
+                  type: varchar(50)
+                  constraints:
+                    nullable: true
+                  remarks: "容器格式（MKV, MP4, AVI 等）"
+              
+              # 元数据提取标志
+              - column:
+                  name: metadata_fetched
+                  type: boolean
+                  constraints:
+                    nullable: false
+                  defaultValue: false
+                  remarks: "是否已获取完整元数据"
+  
+  - changeSet:
+      id: alter-updated-at-auto
+      author: anilink
+      changes:
+        - modifyDataType:
+            tableName: media_file
+            columnName: updated_at
+            newDataType: TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
