@@ -38,13 +38,24 @@ const episodeHeaders = [
 ]
 
 // 获取所有动漫
-const fetchAnimes = async () => {
+const fetchAnimes = async (pageNum = 1) => {
   loading.value = true
   try {
-    const res = await axios.get(`${API_BASE}/animes`)
-    if (res.data?.code === 200) {
-      animes.value = res.data.data || []
-      pagination.value.pageCount = Math.ceil(animes.value.length / pagination.value.itemsPerPage)
+    const params = {
+      page: pageNum,
+      pageSize: pagination.value.itemsPerPage
+    }
+    
+    // 如果有搜索关键词，添加到参数
+    if (search.value.trim()) {
+      params.keyword = search.value.trim()
+    }
+    
+    const res = await axios.get(`${API_BASE}/animes`, { params })
+    if (res.data?.code === 200 && res.data.data) {
+      animes.value = res.data.data.content || []
+      pagination.value.pageCount = res.data.data.totalElements || 0
+      pagination.value.page = pageNum
     }
   } catch (error) {
     console.error('获取动漫列表失败:', error)
@@ -118,24 +129,29 @@ const formatVideoCodec = (video, audio) => {
   return parts.length > 0 ? parts.join('/') : '未知'
 }
 
-// 搜索过滤
-const filteredAnimes = computed(() => {
-  if (!search.value) return animes.value
+// 搜索时重新加载列表
+const onSearch = () => {
+  pagination.value.page = 1
+  fetchAnimes(1)
+}
 
-  const q = search.value.toLowerCase()
-  return animes.value.filter(anime =>
-    (anime.title && anime.title.toLowerCase().includes(q)) ||
-    (anime.altTitle && anime.altTitle.toLowerCase().includes(q)) ||
-    (anime.animeId && anime.animeId.toString().includes(q))
-  )
-})
-
-// 分页的动漫数据
-const paginatedAnimes = computed(() => {
-  const start = (pagination.value.page - 1) * pagination.value.itemsPerPage
-  const end = start + pagination.value.itemsPerPage
-  return filteredAnimes.value.slice(start, end)
-})
+// 表格分页/排序/过滤变化
+const onTableOptionsChange = (options) => {
+  const page = options.page || 1
+  const pageSize = options.itemsPerPage || 10
+  
+  // 如果每页大小改变，重置到第一页
+  if (pageSize !== pagination.value.itemsPerPage) {
+    pagination.value.itemsPerPage = pageSize
+    pagination.value.page = 1
+    fetchAnimes(1)
+  } else {
+    // 只改变页码
+    pagination.value.page = page
+    pagination.value.itemsPerPage = pageSize
+    fetchAnimes(page)
+  }
+}
 
 // 获取动漫的图片URL
 const getImageUrl = (localImagePath) => {
@@ -147,7 +163,8 @@ const getImageUrl = (localImagePath) => {
 }
 
 onMounted(() => {
-  fetchAnimes()
+  pagination.value.page = 1
+  fetchAnimes(1)
 })
 </script>
 
@@ -165,31 +182,41 @@ onMounted(() => {
         <div class="d-flex gap-3 mb-4">
           <v-text-field
             v-model="search"
-            placeholder="搜索动漫标题或ID..."
+            placeholder="搜索动漫标题..."
             prepend-icon="mdi-magnify"
             variant="outlined"
             density="compact"
             clearable
+            @keyup.enter="onSearch"
           ></v-text-field>
           <v-btn
             color="primary"
-            @click="fetchAnimes"
+            @click="onSearch"
             :loading="loading"
+            prepend-icon="mdi-search"
+          >
+            搜索
+          </v-btn>
+          <v-btn
+            variant="outlined"
+            @click="() => { search = ''; pagination.page = 1; fetchAnimes(1) }"
             prepend-icon="mdi-refresh"
           >
-            刷新
+            重置
           </v-btn>
         </div>
 
         <!-- 动漫列表 -->
-        <v-data-table-virtual
+        <v-data-table
           :headers="animeHeaders"
-          :items="paginatedAnimes"
+          :items="animes"
           :loading="loading"
           :items-per-page="pagination.itemsPerPage"
+          :server-items-length="pagination.pageCount"
           density="compact"
           class="elevation-1"
           hover
+          @update:options="onTableOptionsChange"
         >
           <template v-slot:item.title="{ item }">
             <div class="text-truncate" :title="item.title">{{ item.title }}</div>
@@ -231,17 +258,7 @@ onMounted(() => {
               <div>暂无动漫数据</div>
             </div>
           </template>
-        </v-data-table-virtual>
-
-        <!-- 分页 -->
-        <div class="d-flex align-center justify-center gap-2 mt-4">
-          <v-pagination
-            v-model="pagination.page"
-            :length="Math.ceil(filteredAnimes.length / pagination.itemsPerPage)"
-            size="small"
-            total-visible="7"
-          ></v-pagination>
-        </div>
+        </v-data-table>
       </v-card-text>
     </v-card>
 

@@ -2,15 +2,21 @@ package xyz.ezsky.anilink.service;
 
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import xyz.ezsky.anilink.model.entity.Anime;
 import xyz.ezsky.anilink.model.entity.MediaFile;
 import xyz.ezsky.anilink.model.vo.AnimeVO;
 import xyz.ezsky.anilink.model.vo.EpisodeVO;
+import xyz.ezsky.anilink.model.vo.PageVO;
 import xyz.ezsky.anilink.repository.AnimeRepository;
 import xyz.ezsky.anilink.repository.MediaFileRepository;
 
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -38,6 +44,44 @@ public class AnimeService {
                 .map(this::convertToVO)
                 .collect(Collectors.toList());
     }
+
+    /**
+     * 获取分页的动漫列表
+     *
+     * @param page 页码（从1开始）
+     * @param pageSize 每页大小
+     * @param keyword 搜索关键词（可选，为null时查询所有）
+     * @return 分页结果VO
+     */
+    public PageVO<AnimeVO> getAnimesPage(int page, int pageSize, String keyword) {
+        // 创建分页请求（Spring Data JPA中page从0开始）
+        Pageable pageable = PageRequest.of(page - 1, pageSize);
+        
+        // 根据是否有关键词选择查询方法
+        Page<Anime> animePage;
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            animePage = animeRepository.findByTitleContainingIgnoreCase(keyword.trim(), pageable);
+        } else {
+            animePage = animeRepository.findAll(pageable);
+        }
+        
+        // 将实体转换为VO
+        List<AnimeVO> data = animePage.getContent().stream()
+                .map(this::convertToVO)
+                .collect(Collectors.toList());
+        
+        // 构建返回结果
+        return PageVO.<AnimeVO>builder()
+                .content(data)
+                .totalElements(animePage.getTotalElements())
+                .totalPages(animePage.getTotalPages())
+                .currentPage(page)
+                .pageSize(pageSize)
+                .hasNext(animePage.hasNext())
+                .hasPrevious(animePage.hasPrevious())
+                .build();
+    }
+
 
     /**
      * 根据动漫ID获取动漫详情

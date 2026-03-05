@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.*;
 import xyz.ezsky.anilink.model.vo.AnimeVO;
 import xyz.ezsky.anilink.model.vo.ApiResponseVO;
 import xyz.ezsky.anilink.model.vo.EpisodeVO;
+import xyz.ezsky.anilink.model.vo.PageVO;
 import xyz.ezsky.anilink.service.AnimeService;
 
 import java.util.List;
@@ -24,15 +25,24 @@ public class AnimeController {
     private AnimeService animeService;
 
     /**
-     * 获取所有动漫列表
+     * 获取所有动漫列表（分页）
      *
-     * @return 动漫列表
+     * @param page 页码（从1开始）
+     * @param pageSize 每页大小
+     * @param keyword 搜索关键词（可选）
+     * @return 动漫列表分页数据
      */
-    @Operation(summary = "获取所有动漫", description = "获取系统中已记录的所有动漫列表")
+    @Operation(summary = "获取所有动漫（分页）", description = "获取系统中已记录的所有动漫列表，支持分页和按标题模糊查询")
     @GetMapping
-    public ApiResponseVO<List<AnimeVO>> getAllAnimes() {
-        List<AnimeVO> animes = animeService.getAllAnimes();
-        return ApiResponseVO.success(animes);
+    public ApiResponseVO<PageVO<AnimeVO>> getAllAnimes(
+            @Parameter(description = "页码，从1开始", required = false)
+            @RequestParam(defaultValue = "1") Integer page,
+            @Parameter(description = "每页大小", required = false)
+            @RequestParam(defaultValue = "20") Integer pageSize,
+            @Parameter(description = "搜索关键词（按标题模糊查询）", required = false)
+            @RequestParam(required = false) String keyword) {
+        PageVO<AnimeVO> result = animeService.getAnimesPage(page, pageSize, keyword);
+        return ApiResponseVO.success(result);
     }
 
     /**
