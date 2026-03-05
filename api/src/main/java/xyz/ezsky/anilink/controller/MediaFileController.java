@@ -63,7 +63,7 @@ public class MediaFileController {
             @PathVariable Long libraryId) {
         try {
             mediaFileService.reprocessMetadataForLibrary(libraryId);
-            return ApiResponseVO.success(null, "已提交元数据重新获取任务，请稍候");
+            return ApiResponseVO.success(null, "已提交元数据重新获取任务，后台处理中");
         } catch (Exception e) {
             return ApiResponseVO.fail("提交任务失败: " + e.getMessage());
         }
