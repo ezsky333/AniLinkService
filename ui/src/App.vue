@@ -50,14 +50,21 @@ const checkInstallStatus = async () => {
   }
 }
 
-onMounted(() => {
-  const installed = localStorage.getItem('installed')
-  if (installed === 'true') {
-    loadSiteConfig()
-    checkingInstall.value = false
-  } else {
-    checkInstallStatus()
+onMounted(async () => {
+  // Try to use local config if available
+  const stored = localStorage.getItem('siteConfig')
+  if (stored) {
+    try {
+      siteConfig.value = JSON.parse(stored)
+      checkingInstall.value = false
+      return
+    } catch (e) {
+      console.error('解析本地配置失败:', e)
+    }
   }
+  
+  // If no local config, fetch from remote
+  checkInstallStatus()
 })
 </script>
 

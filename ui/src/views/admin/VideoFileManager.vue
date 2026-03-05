@@ -15,6 +15,12 @@ const mediaLibraries = ref([])
 const queueStatus = ref(null)
 const reprocessingLibraryId = ref(null)
 
+const pagination = ref({
+  page: 1,
+  itemsPerPage: 20,
+  pageCount: 1
+})
+
 const selectedFile = ref(null)
 const editingFile = ref({
   episodeId: '',
@@ -45,10 +51,13 @@ const fetchLibraries = async () => {
 }
 
 // 获取媒体文件列表
-const fetchMediaFiles = async () => {
+const fetchMediaFiles = async (pageNum = 1) => {
   loading.value = true
   try {
-    const params = {}
+    const params = {
+      page: pageNum - 1,  // 后端page从0开始
+      pageSize: pagination.value.itemsPerPage
+    }
     if (selectedLibraryId.value) {
       params.libraryId = selectedLibraryId.value
     }
@@ -56,6 +65,8 @@ const fetchMediaFiles = async () => {
     const res = await axios.get(`${API_BASE}/media-files`, { params })
     if (res.data?.code === 200 && res.data?.data) {
       mediaFiles.value = res.data.data.content || []
+      pagination.value.pageCount = res.data.data.totalElements || 0
+      pagination.value.page = pageNum
     }
   } catch (error) {
     console.error('获取媒体文件失败:', error)
@@ -105,7 +116,8 @@ const saveEdit = async () => {
     if (res.data?.code === 200) {
       successMessage.value = '更新成功'
       editDialog.value = false
-      await fetchMediaFiles()
+      pagination.value.page = 1
+      await fetchMediaFiles(1)
       setTimeout(() => { successMessage.value = '' }, 3000)
     }
   } catch (error) {
@@ -128,7 +140,8 @@ const deleteFile = async (fileId, deletePhysicalFile = false) => {
     })
     if (res.data?.code === 200) {
       successMessage.value = '删除成功'
-      await fetchMediaFiles()
+      pagination.value.page = 1
+      await fetchMediaFiles(1)
       setTimeout(() => { successMessage.value = '' }, 3000)
     }
   } catch (error) {
@@ -154,9 +167,10 @@ const reprocessMetadata = async (libraryId) => {
     const res = await axios.post(`${API_BASE}/media-files/reprocess-metadata/${libraryId}`)
     if (res.data?.code === 200) {
       successMessage.value = '已提交重新获取任务'
-      // 5秒后刷新队列状态
+      // 5秒后刷新队列状态和文件列表
       setTimeout(() => {
         fetchQueueStatus()
+        fetchMediaFiles(1)
       }, 5000)
     }
   } catch (error) {
@@ -198,12 +212,31 @@ const getResolution = (file) => {
 
 // 库选择变化
 const handleLibraryChange = () => {
-  fetchMediaFiles()
+  pagination.value.page = 1
+  fetchMediaFiles(1)
+}
+
+// 页码或每页大小变化
+const onTableOptionsChange = (options) => {
+  const page = options.page || 1
+  const pageSize = options.itemsPerPage || 20
+  
+  // 如果每页大小改变，重置到第一页
+  if (pageSize !== pagination.value.itemsPerPage) {
+    pagination.value.itemsPerPage = pageSize
+    fetchMediaFiles(1)
+  } else {
+    // 只改变页码
+    pagination.value.page = page
+    pagination.value.itemsPerPage = pageSize
+    fetchMediaFiles(page)
+  }
 }
 
 onMounted(() => {
+  pagination.value.page = 1
   fetchLibraries()
-  fetchMediaFiles()
+  fetchMediaFiles(1)
   fetchQueueStatus()
 })
 </script>
@@ -266,8 +299,11 @@ onMounted(() => {
         :headers="headers"
         :items="mediaFiles"
         :loading="loading"
+        :items-per-page="pagination.itemsPerPage"
+        :server-items-length="pagination.pageCount"
         density="compact"
         class="elevation-0"
+        @update:options="onTableOptionsChange"
       >
   
         <template v-slot:item.size="{ item }">

@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import xyz.ezsky.anilink.model.dto.MediaFileDTO;
 import xyz.ezsky.anilink.model.dto.UpdateMediaFileRequest;
@@ -20,6 +21,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -99,11 +101,13 @@ public class MediaFileService {
     }
 
     /**
-     * 批量重新获取指定媒体库的元数据
+     * 批量重新获取指定媒体库的元数据（异步）
      * 
      * @param libraryId 媒体库ID
+     * @return CompletableFuture<Void>
      */
-    public void reprocessMetadataForLibrary(Long libraryId) {
+    @Async
+    public CompletableFuture<Void> reprocessMetadataForLibrary(Long libraryId) {
         List<MediaFile> files = mediaFileRepository.findByLibraryId(libraryId);
         
         for (MediaFile file : files) {
@@ -117,6 +121,7 @@ public class MediaFileService {
         }
         
         log.info("Submitted {} files from library {} for metadata reprocessing", files.size(), libraryId);
+        return CompletableFuture.completedFuture(null);
     }
 
     /**
