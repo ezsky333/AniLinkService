@@ -56,6 +56,7 @@ const fetchAnimes = async (pageNum = 1) => {
       animes.value = res.data.data.content || []
       pagination.value.pageCount = res.data.data.totalElements || 0
       pagination.value.page = pageNum
+      console.log('获取动漫列表成功:', pagination.value)
     }
   } catch (error) {
     console.error('获取动漫列表失败:', error)
@@ -207,12 +208,12 @@ onMounted(() => {
         </div>
 
         <!-- 动漫列表 -->
-        <v-data-table
+        <v-data-table-server
           :headers="animeHeaders"
           :items="animes"
           :loading="loading"
           :items-per-page="pagination.itemsPerPage"
-          :server-items-length="pagination.pageCount"
+          :items-length="pagination.pageCount"
           density="compact"
           class="elevation-1"
           hover
@@ -258,7 +259,7 @@ onMounted(() => {
               <div>暂无动漫数据</div>
             </div>
           </template>
-        </v-data-table>
+        </v-data-table-server>
       </v-card-text>
     </v-card>
 

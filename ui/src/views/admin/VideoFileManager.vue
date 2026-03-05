@@ -17,7 +17,7 @@ const reprocessingLibraryId = ref(null)
 
 const pagination = ref({
   page: 1,
-  itemsPerPage: 20,
+  itemsPerPage: 10,
   pageCount: 1
 })
 
@@ -295,12 +295,12 @@ onMounted(() => {
 
     <!-- 文件列表 -->
     <v-card>
-      <v-data-table
+      <v-data-table-server
         :headers="headers"
         :items="mediaFiles"
         :loading="loading"
         :items-per-page="pagination.itemsPerPage"
-        :server-items-length="pagination.pageCount"
+        :items-length="pagination.pageCount"
         density="compact"
         class="elevation-0"
         @update:options="onTableOptionsChange"
@@ -372,7 +372,7 @@ onMounted(() => {
             <p class="text-body-1 mt-4 text-grey">暂无视频文件</p>
           </div>
         </template>
-      </v-data-table>
+      </v-data-table-server>
     </v-card>
 
     <!-- 文件详情对话框 -->
