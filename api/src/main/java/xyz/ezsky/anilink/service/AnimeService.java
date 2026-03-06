@@ -33,6 +33,11 @@ public class AnimeService {
     @Autowired
     private MediaFileRepository mediaFileRepository;
 
+    // setter used by unit tests
+    public void setMediaFileRepository(MediaFileRepository mediaFileRepository) {
+        this.mediaFileRepository = mediaFileRepository;
+    }
+
     /**
      * 获取所有动漫列表
      *
@@ -96,19 +101,32 @@ public class AnimeService {
     }
 
     /**
-     * 根据动漫ID获取视频库中该动漫的所有剧集
+     * 根据动漫ID获取视频库中该动漫的剧集（数据库分页）
      *
      * @param animeId 弹幕库动漫ID
-     * @return 该动漫的剧集列表
+     * @param page 页码（从1开始）
+     * @param pageSize 每页大小
+     * @return 分页结果VO（按媒体文件ID升序）
      */
-    public List<EpisodeVO> getEpisodesByAnimeId(Long animeId) {
-        // 首先获取所有媒体文件，然后筛选出属于该动漫的文件
-        List<MediaFile> allMediaFiles = mediaFileRepository.findAll();
-        
-        return allMediaFiles.stream()
-                .filter(file -> file.getAnimeId() != null && file.getAnimeId().equals(animeId))
+    public PageVO<EpisodeVO> getEpisodesByAnimeId(Long animeId, int page, int pageSize) {
+        Pageable pageable = PageRequest.of(page - 1, pageSize);
+        // 指定按照 id 升序排序
+        pageable = PageRequest.of(page - 1, pageSize, org.springframework.data.domain.Sort.by("id").ascending());
+
+        Page<MediaFile> mediaPage = mediaFileRepository.findByAnimeId(animeId, pageable);
+        List<EpisodeVO> episodes = mediaPage.getContent().stream()
                 .map(this::convertToEpisodeVO)
                 .collect(Collectors.toList());
+
+        return PageVO.<EpisodeVO>builder()
+                .content(episodes)
+                .totalElements(mediaPage.getTotalElements())
+                .totalPages(mediaPage.getTotalPages())
+                .currentPage(page)
+                .pageSize(pageSize)
+                .hasNext(mediaPage.hasNext())
+                .hasPrevious(mediaPage.hasPrevious())
+                .build();
     }
 
     /**
