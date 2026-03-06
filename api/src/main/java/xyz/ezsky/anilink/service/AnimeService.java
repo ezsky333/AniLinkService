@@ -111,7 +111,7 @@ public class AnimeService {
     public PageVO<EpisodeVO> getEpisodesByAnimeId(Long animeId, int page, int pageSize) {
         Pageable pageable = PageRequest.of(page - 1, pageSize);
         // 指定按照 id 升序排序
-        pageable = PageRequest.of(page - 1, pageSize, org.springframework.data.domain.Sort.by("id").ascending());
+        pageable = PageRequest.of(page - 1, pageSize, org.springframework.data.domain.Sort.by("episode_id").ascending());
 
         Page<MediaFile> mediaPage = mediaFileRepository.findByAnimeId(animeId, pageable);
         List<EpisodeVO> episodes = mediaPage.getContent().stream()
