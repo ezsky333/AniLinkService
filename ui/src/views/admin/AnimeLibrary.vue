@@ -11,6 +11,13 @@ const episodes = ref([])
 const episodesLoading = ref(false)
 const dialogOpen = ref(false)
 
+// episodes pagination state for server-side paging
+const episodesPagination = ref({
+  page: 1,
+  itemsPerPage: 10,
+  pageCount: 0
+})
+
 const search = ref('')
 const sortBy = ref([])
 const pagination = ref({
@@ -65,19 +72,26 @@ const fetchAnimes = async (pageNum = 1) => {
   }
 }
 
-// 获取动漫的剧集
-const fetchEpisodes = async (animeId) => {
+// 获取动漫的剧集（服务端分页）
+const fetchEpisodes = async (animeId, page = episodesPagination.value.page) => {
   episodesLoading.value = true
   try {
-    const res = await axios.get(`${API_BASE}/animes/${animeId}/episodes`)
-    if (res.data?.code === 200) {
-      episodes.value = (res.data.data || []).map(ep => ({
+    const params = {
+      page,
+      pageSize: episodesPagination.value.itemsPerPage
+    }
+    const res = await axios.get(`${API_BASE}/animes/${animeId}/episodes`, { params })
+    if (res.data?.code === 200 && res.data.data) {
+      const data = res.data.data
+      episodes.value = (data.content || []).map(ep => ({
         ...ep,
         resolution: ep.width && ep.height ? `${ep.width}x${ep.height}` : '未知',
         durationStr: formatDuration(ep.duration),
         sizeStr: formatFileSize(ep.size),
         videoFormat: formatVideoCodec(ep.videoCodec, ep.audioCodec)
       }))
+      episodesPagination.value.pageCount = data.totalElements || 0
+      episodesPagination.value.page = data.currentPage || page
     }
   } catch (error) {
     console.error('获取剧集列表失败:', error)
@@ -90,8 +104,10 @@ const fetchEpisodes = async (animeId) => {
 // 选择动漫并获取其剧集
 const selectAnime = async (anime) => {
   selectedAnime.value = anime
+  // reset pagination
+  episodesPagination.value.page = 1
   dialogOpen.value = true
-  await fetchEpisodes(anime.animeId)
+  await fetchEpisodes(anime.animeId, 1)
 }
 
 // 关闭详情弹窗
@@ -136,7 +152,7 @@ const onSearch = () => {
   fetchAnimes(1)
 }
 
-// 表格分页/排序/过滤变化
+// 表格分页/排序/过滤变化（动漫列表）
 const onTableOptionsChange = (options) => {
   const page = options.page || 1
   const pageSize = options.itemsPerPage || 10
@@ -167,6 +183,27 @@ onMounted(() => {
   pagination.value.page = 1
   fetchAnimes(1)
 })
+
+// 监听剧集表格分页变化
+const onEpisodesOptionsChange = (options) => {
+  const page = options.page || 1
+  const pageSize = options.itemsPerPage || episodesPagination.value.itemsPerPage
+
+  if (pageSize !== episodesPagination.value.itemsPerPage) {
+    episodesPagination.value.itemsPerPage = pageSize
+    episodesPagination.value.page = 1
+    if (selectedAnime.value) {
+      fetchEpisodes(selectedAnime.value.animeId, 1)
+    }
+  } else {
+    episodesPagination.value.page = page
+    episodesPagination.value.itemsPerPage = pageSize
+    if (selectedAnime.value) {
+      fetchEpisodes(selectedAnime.value.animeId, page)
+    }
+  }
+}
+
 </script>
 
 <template>
@@ -325,7 +362,7 @@ onMounted(() => {
                   </div>
                   <div class="flex items-center gap-1">
                     <span class="font-medium text-sm text-gray-700 min-w-[60px]">本地：</span>
-                    <span class="text-sm text-gray-900">{{ episodes.length }}</span>
+                    <span class="text-sm text-gray-900">{{ episodesPagination.pageCount }}</span>
                   </div>
                   <div class="flex items-center gap-1" v-if="selectedAnime.duration">
                     <span class="font-medium text-sm text-gray-700 min-w-[60px]">片长：</span>
@@ -368,16 +405,18 @@ onMounted(() => {
 
           <!-- 下方：剧集列表 -->
           <div>
-            <h4 class="mb-3">本地剧集列表 (共 {{ episodes.length }} 集)</h4>
-            <v-data-table
+            <h4 class="mb-3">本地剧集列表 (共 {{ episodesPagination.pageCount }} 集)</h4>
+            <v-data-table-server
               :headers="episodeHeaders"
               :items="episodes"
               :loading="episodesLoading"
+              :items-per-page="episodesPagination.itemsPerPage"
+              :items-length="episodesPagination.pageCount"
+              :page="episodesPagination.page"
               density="compact"
               class="elevation-1"
               hover
-              :items-per-page="10"
-              :page="1"
+              @update:options="onEpisodesOptionsChange"
             >
               <template v-slot:item.fileName="{ item }">
                 <div class="text-truncate text-caption" :title="item.fileName" style="max-width: 150px">
@@ -417,7 +456,7 @@ onMounted(() => {
                   <div class="text-caption">暂无剧集</div>
                 </div>
               </template>
-            </v-data-table>
+            </v-data-table-server>
           </div>
         </v-card-text>
       </v-card>

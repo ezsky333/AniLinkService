@@ -64,18 +64,24 @@ public class AnimeController {
     }
 
     /**
-     * 根据动漫ID获取视频库中该动漫的所有剧集
+     * 根据动漫ID获取视频库中该动漫的剧集（支持分页）
      *
      * @param animeId 弹幕库动漫ID
-     * @return 该动漫的剧集列表
+     * @param page 页码（从1开始）
+     * @param pageSize 每页大小
+     * @return 分页的剧集列表
      */
-    @Operation(summary = "获取动漫的剧集列表", description = "根据弹幕库动漫ID获取当前视频库中该动漫的所有剧集")
+    @Operation(summary = "获取动漫的剧集列表", description = "根据弹幕库动漫ID获取当前视频库中该动漫的所有剧集，可分页")
     @GetMapping("/{animeId}/episodes")
-    public ApiResponseVO<List<EpisodeVO>> getEpisodesByAnimeId(
+    public ApiResponseVO<PageVO<EpisodeVO>> getEpisodesByAnimeId(
             @Parameter(description = "弹幕库动漫ID", required = true)
-            @PathVariable Long animeId) {
-        List<EpisodeVO> episodes = animeService.getEpisodesByAnimeId(animeId);
-        return ApiResponseVO.success(episodes);
+            @PathVariable Long animeId,
+            @Parameter(description = "页码，从1开始", required = false)
+            @RequestParam(defaultValue = "1") Integer page,
+            @Parameter(description = "每页大小", required = false)
+            @RequestParam(defaultValue = "20") Integer pageSize) {
+        PageVO<EpisodeVO> episodesPage = animeService.getEpisodesByAnimeId(animeId, page, pageSize);
+        return ApiResponseVO.success(episodesPage);
     }
 
     /**

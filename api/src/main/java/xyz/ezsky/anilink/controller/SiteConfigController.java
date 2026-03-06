@@ -26,7 +26,6 @@ public class SiteConfigController {
      * 获取站点配置信息
      */
     @GetMapping("config")
-    @SaCheckRole("super-admin")
     @Operation(summary = "获取站点配置", description = "获取站点名称、描述、URL等配置信息")
     public ApiResponseVO<SiteConfigVO> getSiteConfig() {
         SiteConfigVO config = siteConfigService.getSiteConfig();
