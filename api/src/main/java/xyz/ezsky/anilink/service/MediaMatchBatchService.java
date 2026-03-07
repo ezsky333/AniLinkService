@@ -39,7 +39,7 @@ public class MediaMatchBatchService {
     private MediaHashService mediaHashService;
 
     private final ExecutorService executorService = Executors.newFixedThreadPool(2);
-    private static final int BATCH_SIZE = 50;
+    private static final int BATCH_SIZE = 20;
 
     /**
      * 对整个媒体库进行批量匹配

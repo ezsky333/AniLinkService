@@ -213,6 +213,15 @@ public class DandanMatchService {
             if (topSuccess != null && !topSuccess.asBoolean(false)) {
                 String errorMsg = root.get("errorMessage") != null ? root.get("errorMessage").asText() : "API返回失败";
                 log.warn("Dandan batch match API returned failure: {}", errorMsg);
+                
+                // 打印完整的请求入参以便调试
+                try {
+                    String requestJson = objectMapper.writeValueAsString(request);
+                    log.error("弹弹批量匹配API失败 - 错误: {}, 请求参数: {}", errorMsg, requestJson);
+                } catch (Exception e) {
+                    log.error("Failed to serialize request for logging", e);
+                }
+                
                 // 返回与输入等量的失败结果
                 for (int i = 0; i < items.size(); i++) {
                     MatchResult result = new MatchResult();

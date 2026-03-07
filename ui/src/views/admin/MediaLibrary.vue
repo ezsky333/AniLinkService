@@ -136,6 +136,21 @@ const scanLibrary = async (id) => {
   }
 }
 
+const rematchLibrary = async (id) => {
+  scanning.value = true
+  try {
+    const res = await axios.post(`${API_BASE}/media-library/rematch/${id}`)
+    if (res.data?.code === 200) {
+      alert(res.data.msg || '弹幕重新匹配已触发')
+      await fetchLibraries()
+    }
+  } catch (error) {
+    alert('重新匹配失败：' + (error.response?.data?.msg || '请稍后重试'))
+  } finally {
+    scanning.value = false
+  }
+}
+
 const scanAll = async () => {
   if (!confirm('确定要扫描所有媒体库吗？')) return
 
@@ -236,13 +251,27 @@ onMounted(() => {
               size="small"
               :loading="scanning"
               @click="scanLibrary(library.id)"
-            />
+            >
+              <v-tooltip activator="parent" location="top">扫描媒体库</v-tooltip>
+            </v-btn>
+            <v-btn
+              icon="mdi-sync"
+              variant="text"
+              color="success"
+              size="small"
+              :loading="scanning"
+              @click="rematchLibrary(library.id)"
+            >
+              <v-tooltip activator="parent" location="top">重新匹配弹幕</v-tooltip>
+            </v-btn>
             <v-btn
               icon="mdi-delete"
               variant="text"
               color="error"
               @click="deleteLibrary(library.id)"
-            />
+            >
+              <v-tooltip activator="parent" location="top">删除媒体库</v-tooltip>
+            </v-btn>
           </template>
         </v-list-item>
       </v-list>

@@ -12,6 +12,7 @@ import xyz.ezsky.anilink.model.vo.ApiResponseVO;
 import xyz.ezsky.anilink.model.vo.MediaLibraryVO;
 import xyz.ezsky.anilink.model.vo.PathVO;
 import xyz.ezsky.anilink.service.MediaLibraryService;
+import xyz.ezsky.anilink.service.MediaMatchBatchService;
 
 import java.util.List;
 
@@ -22,6 +23,9 @@ public class MediaLibraryController {
 
     @Autowired
     private MediaLibraryService mediaLibraryService;
+
+    @Autowired
+    private MediaMatchBatchService mediaMatchBatchService;
 
     @Operation(summary = "添加媒体库", description = "添加一个新的媒体库，并立即触发一次扫描")
     @PostMapping
@@ -58,6 +62,14 @@ public class MediaLibraryController {
     public ApiResponseVO<Void> scanAllLibraries() {
         mediaLibraryService.scanAllLibraries();
         return ApiResponseVO.success(null, "扫描已触发");
+    }
+
+    @Operation(summary = "重新匹配指定媒体库", description = "对指定媒体库中未匹配的文件重新进行弹幕匹配")
+    @SaCheckRole("super-admin")
+    @PostMapping("/rematch/{id}")
+    public ApiResponseVO<Void> rematchLibrary(@Parameter(description = "要重新匹配的媒体库ID") @PathVariable Long id) {
+        mediaMatchBatchService.matchLibraryAsync(id);
+        return ApiResponseVO.success(null, "弹幕重新匹配已触发");
     }
 
     @Operation(summary = "查询服务端路径", description = "查询指定根目录下的所有文件和文件夹路径，支持筛选")
