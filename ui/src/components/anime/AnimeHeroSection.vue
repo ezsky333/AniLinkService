@@ -10,7 +10,7 @@
       <div class="anime-rating-block">
         <div class="anime-rating-main">
           <span class="anime-score">{{ ratingMain }}</span>
-          <span class="anime-rating-label">弹弹连载</span>
+          <span class="anime-rating-label">弹弹评分</span>
         </div>
         <div class="anime-rating-others">
           <span>🍙 Bangumi {{ ratingBangumi }}</span>
@@ -19,7 +19,7 @@
       </div>
 
       <div class="anime-status-badge">
-        <span class="anime-badge"><i class="mdi mdi-bell"></i> 放送中 · {{ airDayText }}</span>
+        <span class="anime-badge"><i class="mdi mdi-bell"></i> {{ airingStatusText }}</span>
         <span class="anime-badge anime-badge-air">更新 {{ mainEpisodes.length }}/{{ totalEpisodes }}</span>
         <span class="anime-fav-btn" @click="toggleFavorite" :class="{ favorited: isFavorited }">
           <i :class="isFavorited ? 'mdi mdi-star' : 'mdi mdi-star-outline'"></i> 收藏
@@ -49,6 +49,10 @@ const props = defineProps({
   },
   titleInfo: {
     type: Object,
+    required: true
+  },
+  isOnAir: {
+    type: Boolean,
     required: true
   },
   airDayText: {
@@ -90,6 +94,13 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['update:isSummaryExpanded', 'toggleFavorite']);
+
+const airingStatusText = computed(() => {
+  if (props.isOnAir) {
+    return props.airDayText ? `放送中 · ${props.airDayText}` : '放送中';
+  }
+  return '未在更新';
+});
 
 const toggleSummary = () => {
   emit('update:isSummaryExpanded', !props.isSummaryExpanded);

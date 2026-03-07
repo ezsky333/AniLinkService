@@ -13,6 +13,7 @@
         <AnimeHeroSection 
           :anime-data="animeData"
           :title-info="titleInfo"
+          :is-on-air="isOnAir"
           :air-day-text="airDayText"
           :rating-main="ratingMain"
           :rating-bangumi="ratingBangumi"
@@ -174,7 +175,13 @@ const mainEpisodes = computed(() =>
   animeData.value?.episodes.filter(ep => getEpisodeType(ep) === 'main') || []
 );
 
-const ratingMain = computed(() => animeData.value?.ratingDetails?.['弹弹play连载中评分']?.toFixed(2) ?? '9.55');
+const formatRating = (value, digits = 1) => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num.toFixed(digits) : '--';
+};
+
+const isOnAir = computed(() => Boolean(animeData.value?.isOnAir));
+const ratingMain = computed(() => formatRating(animeData.value?.rating, 1));
 const ratingBangumi = computed(() => animeData.value?.ratingDetails?.['Bangumi评分'] ?? '7.8');
 const ratingAnidb = computed(() => animeData.value?.ratingDetails?.['Anidb连载中评分'] ?? '8.51');
 
@@ -209,7 +216,7 @@ const titleInfo = computed(() => {
 
 const airDayText = computed(() => {
   const day = animeData.value?.airDay;
-  const dayMap = { 1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 7: '周日' };
+  const dayMap = { 0: '周日', 1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 7: '周日' };
   return dayMap[day] || '';
 });
 
