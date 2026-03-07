@@ -4,16 +4,30 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import cn.dev33.satoken.annotation.SaCheckRole;
 import xyz.ezsky.anilink.model.dto.MediaFileDTO;
 import xyz.ezsky.anilink.model.dto.UpdateMediaFileRequest;
+import xyz.ezsky.anilink.model.entity.MediaFile;
 import xyz.ezsky.anilink.model.vo.ApiResponseVO;
 import xyz.ezsky.anilink.model.vo.PageVO;
 import xyz.ezsky.anilink.model.vo.QueueStatusVO;
 import xyz.ezsky.anilink.service.MediaFileService;
 import xyz.ezsky.anilink.service.MediaMetadataQueueManager;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 /**
  * 媒体文件管理API
@@ -110,5 +124,141 @@ public class MediaFileController {
                 .maxPoolSize(metadataQueueManager.getMaxPoolSize())
                 .build();
         return ApiResponseVO.success(status);
+    }
+
+    @Operation(summary = "获取视频流", description = "根据媒体文件ID获取视频流，支持HTTP Range请求实现跳转播放")
+    @GetMapping("/stream/{id}")
+    public ResponseEntity<Resource> streamVideo(
+            @Parameter(description = "媒体文件ID")
+            @PathVariable Long id,
+            @RequestHeader(value = HttpHeaders.RANGE, required = false) String rangeHeader) {
+        
+        // 获取媒体文件信息
+        MediaFile mediaFile = mediaFileService.getMediaFileById(id);
+        if (mediaFile == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        // 检查文件是否存在
+        Path filePath = Paths.get(mediaFile.getFilePath());
+        File file = filePath.toFile();
+        if (!file.exists() || !file.isFile()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        try {
+            long fileSize = file.length();
+            
+            // 获取文件的 MIME 类型
+            String contentType = Files.probeContentType(filePath);
+            if (contentType == null) {
+                contentType = "video/mp4"; // 默认类型
+            }
+
+            // 如果没有 Range 请求头，返回完整文件
+            if (rangeHeader == null || rangeHeader.trim().isEmpty()) {
+                Resource resource = new FileSystemResource(file);
+                return ResponseEntity.ok()
+                        .contentType(MediaType.parseMediaType(contentType))
+                        .contentLength(fileSize)
+                        .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                        .body(resource);
+            }
+
+            // 解析 Range 请求头
+            String[] ranges = rangeHeader.replace("bytes=", "").split("-");
+            long rangeStart = Long.parseLong(ranges[0]);
+            long rangeEnd = ranges.length > 1 && !ranges[1].isEmpty() 
+                    ? Long.parseLong(ranges[1]) 
+                    : fileSize - 1;
+
+            // 验证范围
+            if (rangeStart > rangeEnd || rangeEnd >= fileSize) {
+                return ResponseEntity.status(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                        .header(HttpHeaders.CONTENT_RANGE, "bytes */" + fileSize)
+                        .build();
+            }
+
+            long contentLength = rangeEnd - rangeStart + 1;
+
+            // 创建范围资源
+            Resource resource = new FileSystemResource(file) {
+                @Override
+                public long contentLength() {
+                    return contentLength;
+                }
+            };
+
+            // 返回部分内容 (206)
+            return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .header(HttpHeaders.CONTENT_RANGE, 
+                            String.format("bytes %d-%d/%d", rangeStart, rangeEnd, fileSize))
+                    .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                    .header(HttpHeaders.CONTENT_LENGTH, String.valueOf(contentLength))
+                    .body(new RangeResource(file, rangeStart, rangeEnd));
+
+        } catch (IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        } catch (NumberFormatException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        }
+    }
+
+    /**
+     * 自定义资源类，支持范围读取
+     */
+    private static class RangeResource extends FileSystemResource {
+        private final long start;
+        private final long end;
+
+        public RangeResource(File file, long start, long end) {
+            super(file);
+            this.start = start;
+            this.end = end;
+        }
+
+        @Override
+        public long contentLength() {
+            return end - start + 1;
+        }
+
+        @Override
+        public java.io.InputStream getInputStream() throws IOException {
+            RandomAccessFile randomAccessFile = new RandomAccessFile(getFile(), "r");
+            randomAccessFile.seek(start);
+            
+            return new java.io.InputStream() {
+                private long position = start;
+                
+                @Override
+                public int read() throws IOException {
+                    if (position > end) {
+                        return -1;
+                    }
+                    position++;
+                    return randomAccessFile.read();
+                }
+                
+                @Override
+                public int read(byte[] b, int off, int len) throws IOException {
+                    if (position > end) {
+                        return -1;
+                    }
+                    long maxLen = end - position + 1;
+                    int actualLen = (int) Math.min(len, maxLen);
+                    int bytesRead = randomAccessFile.read(b, off, actualLen);
+                    if (bytesRead > 0) {
+                        position += bytesRead;
+                    }
+                    return bytesRead;
+                }
+                
+                @Override
+                public void close() throws IOException {
+                    randomAccessFile.close();
+                }
+            };
+        }
     }
 }

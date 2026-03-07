@@ -101,6 +101,16 @@ public class MediaFileService {
     }
 
     /**
+     * 获取媒体文件实体
+     * 
+     * @param fileId 文件ID
+     * @return 媒体文件实体
+     */
+    public MediaFile getMediaFileById(Long fileId) {
+        return mediaFileRepository.findById(fileId).orElse(null);
+    }
+
+    /**
      * 批量重新获取指定媒体库的元数据（异步）
      * 
      * @param libraryId 媒体库ID

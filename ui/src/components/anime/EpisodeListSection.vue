@@ -19,12 +19,16 @@
         v-for="ep in displayedEpisodes" 
         :key="ep.episodeId" 
         class="anime-episode-card" 
-        :class="{ today: isToday(ep) }"
+        :class="{ 
+          today: isToday(ep),
+          'is-current': isCurrentEpisode(ep)
+        }"
       >
         <div class="anime-episode-left">
           <span class="anime-episode-num">{{ episodeNumberDisplay(ep) }}</span>
           <span class="anime-episode-title">{{ ep.episodeTitle }}</span>
           <span v-if="isToday(ep)" class="anime-today-tag">今日更新</span>
+          <span v-if="isCurrentEpisode(ep)" class="anime-current-tag">正在播放</span>
         </div>
         <div class="anime-episode-meta">
           <span>{{ formatDate(ep.airDate) }}</span>
@@ -36,7 +40,9 @@
             :tabindex="canPlay(ep) ? 0 : -1"
             @click.prevent="playEpisode(ep)"
           >
-            <i class="mdi mdi-play-circle"></i> 观看
+            <i v-if="isCurrentEpisode(ep)" class="mdi mdi-volume-high"></i>
+            <i v-else class="mdi mdi-play-circle"></i> 
+            {{ isCurrentEpisode(ep) ? '播放中' : '观看' }}
           </a>
         </div>
       </div>
@@ -63,6 +69,10 @@ const props = defineProps({
   playableEpisodeKeys: {
     type: Set,
     default: () => new Set()
+  },
+  currentEpisodeId: {
+    type: [String, Number],
+    default: null
   }
 });
 
@@ -89,6 +99,13 @@ const isEpisodeExisting = (ep) => {
     return false;
   }
   return props.playableEpisodeKeys.has(String(ep.episodeId));
+};
+
+const isCurrentEpisode = (ep) => {
+  if (!ep || ep.episodeId === undefined || ep.episodeId === null) {
+    return false;
+  }
+  return String(ep.episodeId) === String(props.currentEpisodeId);
 };
 
 const canPlay = (ep) => isEpisodeExisting(ep) && !isFuture(ep);
@@ -139,6 +156,48 @@ const playEpisode = (ep) => {
 
 <style scoped>
 @import '../../styles/anime.css';
+
+/* 正在播放的剧集样式 */
+.anime-episode-card.is-current {
+  background: linear-gradient(135deg, #fef3e8 0%, #ffebd0 100%);
+  border: 2px solid var(--anime-accent-red);
+  box-shadow: 0 4px 16px rgba(196, 93, 43, 0.2);
+  position: relative;
+}
+
+/* 正在播放标签样式 */
+.anime-current-tag {
+  display: inline-block;
+  background: linear-gradient(135deg, var(--anime-accent-red) 0%, var(--anime-accent-orange) 100%);
+  color: white;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  animation: pulse 2s ease-in-out infinite;
+  white-space: nowrap;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* 当前播放状态下的按钮样式 */
+.anime-episode-card.is-current .anime-watch-btn {
+  background: linear-gradient(135deg, var(--anime-accent-red) 0%, var(--anime-accent-orange) 100%) !important;
+  color: white !important;
+  box-shadow: 0 4px 12px rgba(196, 93, 43, 0.3) !important;
+}
+
+.anime-episode-card.is-current .anime-watch-btn:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 16px rgba(196, 93, 43, 0.4) !important;
+}
 
 .anime-watch-btn.disabled {
   background: #d4d4d8;
