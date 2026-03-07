@@ -12,6 +12,7 @@ import xyz.ezsky.anilink.service.SiteConfigService;
 import java.util.Date;
 import java.util.Map;
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 通用 Dandan 客户端工具类，负责签名并发起请求。
@@ -21,7 +22,11 @@ import java.io.IOException;
 @Log4j2
 public class DandanClientUtil {
 
-    private final OkHttpClient okHttpClient = new OkHttpClient();
+    private final OkHttpClient okHttpClient = new OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .build();
     private final SiteConfigService siteConfigService;
 
     public DandanClientUtil(SiteConfigService siteConfigService) {

@@ -245,31 +245,35 @@ onMounted(() => {
               {{ library.status }}
             </v-chip>
             <v-btn
-              icon="mdi-refresh"
+              icon
               variant="text"
               color="info"
               size="small"
               :loading="scanning"
               @click="scanLibrary(library.id)"
             >
+              <v-icon>mdi-refresh</v-icon>
               <v-tooltip activator="parent" location="top">扫描媒体库</v-tooltip>
             </v-btn>
             <v-btn
-              icon="mdi-sync"
+              icon
               variant="text"
               color="success"
               size="small"
               :loading="scanning"
               @click="rematchLibrary(library.id)"
             >
+              <v-icon>mdi-sync</v-icon>
               <v-tooltip activator="parent" location="top">重新匹配弹幕</v-tooltip>
             </v-btn>
             <v-btn
-              icon="mdi-delete"
+              icon
               variant="text"
               color="error"
+              size="small"
               @click="deleteLibrary(library.id)"
             >
+              <v-icon>mdi-delete</v-icon>
               <v-tooltip activator="parent" location="top">删除媒体库</v-tooltip>
             </v-btn>
           </template>
