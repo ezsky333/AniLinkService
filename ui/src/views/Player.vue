@@ -402,7 +402,7 @@ const fetchDanmaku = async (episodeId) => {
       return []
     }
 
-    const response = await fetch(`/api/v2/comment/${episodeId}?withRelated=false`)
+    const response = await fetch(`/api/v2/comment/${episodeId}?withRelated=true`)
     if (!response.ok) {
       throw new Error(`弹幕接口返回状态: ${response.status}`)
     }
