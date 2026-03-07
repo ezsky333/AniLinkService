@@ -180,10 +180,8 @@ public class MediaScannerService {
             log.info("Added new file: {}", filePath);
             
             // 提交异步元数据提取任务
+            // 注意：匹配队列将在元数据提取完成后自动添加
             mediaMetadataEnricher.enrichMediaFileAsync(savedFile, metadataQueueManager);
-            
-            // 将新文件添加到匹配队列
-            matchQueueManager.addToQueue(savedFile.getId());
         }
     }
 
@@ -279,16 +277,8 @@ public class MediaScannerService {
                                 .collect(Collectors.toMap(MediaFile::getFilePath, Function.identity()));
                         String filePath = file.toAbsolutePath().toString();
                         
-                        if (!existingFilesMap.containsKey(filePath)) {
-                            // 新文件，processFile后将其加入匹配队列
-                            processFile(library, file, attrs, existingFilesMap);
-                            // 重新查询以获取保存后的ID
-                            mediaFileRepository.findByFilePath(filePath).ifPresent(savedFile ->
-                                matchQueueManager.addToQueue(savedFile.getId())
-                            );
-                        } else {
-                            processFile(library, file, attrs, existingFilesMap);
-                        }
+                        // 注意：无论是新文件还是修改的文件，匹配队列将在元数据提取完成后自动添加
+                        processFile(library, file, attrs, existingFilesMap);
                     }
                 }
             } catch (IOException e) {
