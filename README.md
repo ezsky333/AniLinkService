@@ -116,13 +116,10 @@ docker run -d \
    -p 8081:8081 \
    -e DB_PROFILE=h2 \
    -e CONFIG_DIR=/app/config \
-   -e DANDAN_IMAGE_DIR=/images/dandan \
    -v ./config:/app/config \
-   -v ./dandan-images:/images/dandan \
    anilink-service
 ```
 
-`DANDAN_IMAGE_DIR` 用于显式指定 `/images/dandan/**` 的本地封面存储目录。
 
 ## 主要接口示例
 
