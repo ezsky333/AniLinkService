@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
+import { formatAnimeType } from '../utils/animeType'
 
 const route = useRoute()
 const router = useRouter()
@@ -19,12 +20,14 @@ const hasResult = computed(() => list.value.length > 0)
 const canPrev = computed(() => page.value > 1)
 const canNext = computed(() => page.value < totalPages.value)
 
-const buildCoverUrl = (localImagePath) => {
-  if (!localImagePath) {
-    return ''
-  }
-  return `/images/dandan/${encodeURI(localImagePath)}`
+const buildAnimeMeta = (anime) => {
+  const parts = []
+  if (anime?.type) parts.push(formatAnimeType(anime.type))
+  if (anime?.animeId) parts.push(`ID: ${anime.animeId}`)
+  return parts.length ? parts.join(' | ') : '暂无信息'
 }
+
+
 
 const toAnimeDetail = (animeId) => {
   router.push(`/anime/${animeId}`)
@@ -150,8 +153,8 @@ onMounted(() => {
       >
         <div class="cover-wrap">
           <img
-            v-if="buildCoverUrl(anime.localImagePath)"
-            :src="buildCoverUrl(anime.localImagePath)"
+            v-if="anime.imageUrl"
+            :src="anime.imageUrl"
             :alt="anime.title"
             loading="lazy"
           />
@@ -160,8 +163,7 @@ onMounted(() => {
 
         <div class="anime-info">
           <h3 :title="anime.title">{{ anime.title || '未命名动漫' }}</h3>
-          <p class="sub-info">年份: {{ anime.year || '未知' }}</p>
-          <p class="sub-info">集数: {{ anime.episodes || '-' }}</p>
+          <p class="sub-info">{{ buildAnimeMeta(anime) }}</p>
         </div>
       </article>
     </section>

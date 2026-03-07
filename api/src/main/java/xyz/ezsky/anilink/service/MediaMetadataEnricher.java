@@ -34,9 +34,6 @@ public class MediaMetadataEnricher {
     @Autowired
     private MediaFileRepository mediaFileRepository;
 
-    @Autowired
-    private DandanMatchService dandanMatchService;
-
     /**
      * 异步提取并补充媒体文件的完整元数据
      * 
@@ -94,9 +91,6 @@ public class MediaMetadataEnricher {
             // 第三步：标记已获取元数据
             mediaFile.setMetadataFetched(true);
 
-            // 第四步：预留钩子方法供外部调用
-            enrichExternalMetadata(mediaFile);
-
             long duration = System.currentTimeMillis() - startTime;
             log.info("Enriched metadata for file in {} ms: {}", duration, filePath);
 
@@ -123,99 +117,5 @@ public class MediaMetadataEnricher {
         mediaFile.setContainerFormat(metadata.getContainerFormat());
         mediaFile.setVideoCodec(metadata.getVideoCodec());
         mediaFile.setAudioCodec(metadata.getAudioCodec());
-    }
-
-    /**
-     * 钩子方法：供外部接口调用以获取动漫信息
-     * 
-     * 该方法在元数据提取完成后调用，允许外部通过 API 查询弹幕库或动漫数据库，
-     * 从而填充 episodeId、animeId、animeTitle、episodeTitle 等字段。
-     * 
-     * 当前实现为空，由用户在需要时调用外部接口并更新这些字段。
-     * 
-     * 使用示例：
-     * <pre>
-     * AnimeInfo animeInfo = externalAnimeService.queryByHash(mediaFile.getHash());
-     * if (animeInfo != null) {
-     *     mediaFile.setEpisodeId(animeInfo.getEpisodeId());
-     *     mediaFile.setAnimeId(animeInfo.getAnimeId());
-     *     mediaFile.setAnimeTitle(animeInfo.getAnimeTitle());
-     *     mediaFile.setEpisodeTitle(animeInfo.getEpisodeTitle());
-     * }
-     * </pre>
-     * 
-     * @param mediaFile 已包含技术元数据的 MediaFile 实体
-     */
-    protected void enrichExternalMetadata(MediaFile mediaFile) {
-        // 该方法可被子类重写以实现自定义逻辑
-        // 或由 Controller 层在需要时调用外部接口
-        
-        // 示例钩子点（当前未实现）：
-        // 1. 根据 mediaFile.getHash() 查询弹幕库 API
-        // 2. 根据文件名或其他信息推断动漫信息
-        // 3. 缓存查询结果以避免重复请求
-        
-        log.debug("Hook point for external metadata enrichment: {}", mediaFile.getFilePath());
-
-        try {
-            // 优先使用已计算的文件哈希进行匹配
-            String hash = mediaFile.getHash();
-            String fileName = mediaFile.getFileName();
-            Long fileSize = mediaFile.getSize();
-
-            if (hash == null && (fileName == null || fileName.isEmpty())) {
-                // 没有可用信息，跳过
-                return;
-            }
-
-            // 调用弹弹匹配服务
-            xyz.ezsky.anilink.model.dto.AnimeInfo animeInfo = dandanMatchService.queryByFile(fileName, hash, fileSize);
-            if (animeInfo != null) {
-                mediaFile.setEpisodeId(animeInfo.getEpisodeId());
-                mediaFile.setAnimeId(animeInfo.getAnimeId());
-                mediaFile.setAnimeTitle(animeInfo.getAnimeTitle());
-                mediaFile.setEpisodeTitle(animeInfo.getEpisodeTitle());
-
-                // 立刻持久化匹配结果，避免丢失
-                try {
-                    mediaFileRepository.save(mediaFile);
-                    log.info("External match found and saved for file {} -> episodeId={}", mediaFile.getFilePath(), animeInfo.getEpisodeId());
-                } catch (Exception e) {
-                    log.error("Failed to save media file after external match for {}", mediaFile.getFilePath(), e);
-                }
-            }
-        } catch (Exception e) {
-            log.error("Error while enriching external metadata for {}", mediaFile.getFilePath(), e);
-        }
-    }
-
-    /**
-     * 提供方法供外部 API 调用，用来更新动漫相关字段
-     * 
-     * 该方法可以被 Controller 或其他服务调用，用来设置从外部接口获取的动漫信息。
-     * 
-     * @param mediaFileId 媒体文件 ID
-     * @param episodeId   弹幕库编号（可能为 null）
-     * @param animeId     动漫编号
-     * @param animeTitle  动漫主标题
-     * @param episodeTitle 剧集子标题
-     */
-    public void updateAnimeMetadata(Long mediaFileId, String episodeId, Long animeId, 
-                                   String animeTitle, String episodeTitle) {
-        try {
-            mediaFileRepository.findById(mediaFileId).ifPresentOrElse(
-                    mediaFile -> {
-                        mediaFile.setEpisodeId(episodeId);
-                        mediaFile.setAnimeId(animeId);
-                        mediaFile.setAnimeTitle(animeTitle);
-                        mediaFile.setEpisodeTitle(episodeTitle);
-                        mediaFileRepository.save(mediaFile);
-                        log.info("Updated anime metadata for media file id: {}", mediaFileId);
-                    },
-                    () -> log.warn("Media file not found with id: {}", mediaFileId)
-            );
-        } catch (Exception e) {
-            log.error("Error updating anime metadata for media file id: {}", mediaFileId, e);
-        }
     }
 }

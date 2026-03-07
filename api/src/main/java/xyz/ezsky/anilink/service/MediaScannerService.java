@@ -51,6 +51,12 @@ public class MediaScannerService {
     @Autowired
     private MediaMetadataQueueManager metadataQueueManager;
 
+    @Autowired
+    private MediaMatchBatchService mediaMatchBatchService;
+
+    @Autowired
+    private MediaMatchQueueManager matchQueueManager;
+
     private final ExecutorService executorService = Executors.newFixedThreadPool(4);
     private final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
     private final Map<Path, ScheduledFuture<?>> scheduledTasks = new ConcurrentHashMap<>();
@@ -125,6 +131,11 @@ public class MediaScannerService {
 
             // 扫描完成后启动对该库的监听
             startWatching(library);
+
+            // 扫描完成后，触发批量匹配
+            mediaMatchBatchService.matchLibraryAsync(library.getId());
+            log.info("Triggered batch match for library: {}", library.getName());
+
         } catch (IOException e) {
             log.error("Error scanning library: " + library.getName(), e);
         }
@@ -165,11 +176,14 @@ public class MediaScannerService {
             newMediaFile.setLastModified(attrs.lastModifiedTime().toMillis());
             newMediaFile.setSize(attrs.size());
             newMediaFile.setMetadataFetched(false);  // 标记待提取元数据
-            mediaFileRepository.save(newMediaFile);
+            MediaFile savedFile = mediaFileRepository.save(newMediaFile);
             log.info("Added new file: {}", filePath);
             
             // 提交异步元数据提取任务
-            mediaMetadataEnricher.enrichMediaFileAsync(newMediaFile, metadataQueueManager);
+            mediaMetadataEnricher.enrichMediaFileAsync(savedFile, metadataQueueManager);
+            
+            // 将新文件添加到匹配队列
+            matchQueueManager.addToQueue(savedFile.getId());
         }
     }
 
@@ -263,7 +277,18 @@ public class MediaScannerService {
                         List<MediaFile> existingFiles = mediaFileRepository.findByLibraryId(library.getId());
                         Map<String, MediaFile> existingFilesMap = existingFiles.stream()
                                 .collect(Collectors.toMap(MediaFile::getFilePath, Function.identity()));
-                        processFile(library, file, attrs, existingFilesMap);
+                        String filePath = file.toAbsolutePath().toString();
+                        
+                        if (!existingFilesMap.containsKey(filePath)) {
+                            // 新文件，processFile后将其加入匹配队列
+                            processFile(library, file, attrs, existingFilesMap);
+                            // 重新查询以获取保存后的ID
+                            mediaFileRepository.findByFilePath(filePath).ifPresent(savedFile ->
+                                matchQueueManager.addToQueue(savedFile.getId())
+                            );
+                        } else {
+                            processFile(library, file, attrs, existingFilesMap);
+                        }
                     }
                 }
             } catch (IOException e) {

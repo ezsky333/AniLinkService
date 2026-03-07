@@ -14,6 +14,7 @@ import xyz.ezsky.anilink.model.vo.PathVO;
 import xyz.ezsky.anilink.service.SiteConfigService;
 import xyz.ezsky.anilink.service.MediaLibraryService;
 import xyz.ezsky.anilink.service.SystemInfoService;
+import xyz.ezsky.anilink.service.MediaScannerService;
 
 import java.util.List;
 
@@ -33,6 +34,9 @@ public class InitController {
     
     @Autowired
     private SystemInfoService systemInfoService;
+    
+    @Autowired
+    private MediaScannerService mediaScannerService;
     
     /**
      * 检查是否未安装
@@ -58,24 +62,28 @@ public class InitController {
     /**
      * 初始化站点配置和管理员账号
      * 用于安装引导
+     * 注：此步骤完成后会自动触发所有已添加媒体库的扫描和弹弹匹配
      */
     @PostMapping("site-config")
     @Operation(summary = "初始化站点配置", description = "设置站点信息和管理员账号密码，用于安装引导")
     public ApiResponseVO<String> initSiteConfig(@RequestBody SetSiteConfigRequest request) {
         checkNotInstalled();
         siteConfigService.setSiteConfig(request);
+        // 站点配置完成后，触发所有媒体库的扫描和匹配
+        mediaScannerService.scanAllLibraries();
         return ApiResponseVO.success("设置成功", "站点配置已更新");
     }
     
     /**
      * 添加媒体库
      * 用于安装引导
+     * 注：初始化阶段添加的媒体库不会立即扫描和匹配，会在初始化站点配置完成后才统一触发
      */
     @PostMapping("media-library")
     @Operation(summary = "添加媒体库", description = "添加媒体库，用于安装引导")
     public ApiResponseVO<MediaLibraryVO> initMediaLibrary(@RequestBody MediaLibraryDTO dto) {
         checkNotInstalled();
-        MediaLibraryVO result = mediaLibraryService.addLibrary(dto);
+        MediaLibraryVO result = mediaLibraryService.addLibrary(dto, false);
         return ApiResponseVO.success(result, "添加成功");
     }
     

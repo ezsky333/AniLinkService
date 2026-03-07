@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
+import { formatAnimeType } from '../../utils/animeType'
 
 const API_BASE = '/api'
 
@@ -170,15 +171,6 @@ const onTableOptionsChange = (options) => {
   }
 }
 
-// 获取动漫的图片URL
-const getImageUrl = (localImagePath) => {
-  if (!localImagePath) return null
-  // 如果是完整URL，直接返回
-  if (localImagePath.startsWith('http')) return localImagePath
-  // 否则拼接API路径
-  return `/images/dandan/${localImagePath}`
-}
-
 onMounted(() => {
   pagination.value.page = 1
   fetchAnimes(1)
@@ -322,8 +314,8 @@ const onEpisodesOptionsChange = (options) => {
               <div class="flex-shrink-0 pr-6" style="width: 180px">
                 <div class="text-center">
                   <v-img
-                    v-if="selectedAnime.localImagePath"
-                    :src="getImageUrl(selectedAnime.localImagePath)"
+                    v-if="selectedAnime.imageUrl"
+                    :src="selectedAnime.imageUrl"
                     class="rounded"
                     aspect-ratio="3/4"
                   ></v-img>
@@ -343,7 +335,7 @@ const onEpisodesOptionsChange = (options) => {
                   <h3 class="mb-2">{{ selectedAnime.title }}</h3>
                   <div class="d-flex flex-wrap gap-2 mb-3">
                     <v-chip v-if="selectedAnime.type" size="small" color="primary" variant="tonal">
-                      {{ selectedAnime.type }}
+                      {{ formatAnimeType(selectedAnime.type) }}
                     </v-chip>
                     <v-chip v-if="selectedAnime.year" size="small" variant="outlined">
                       {{ selectedAnime.year }}

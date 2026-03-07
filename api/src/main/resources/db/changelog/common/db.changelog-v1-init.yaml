@@ -1,0 +1,522 @@
+databaseChangeLog:
+  # ============================================
+  # 1. 基础表：用户、角色、权限
+  # ============================================
+  - changeSet:
+      id: 1-create-users-table
+      author: anilink
+      changes:
+        - createTable:
+            tableName: users
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: username
+                  type: varchar(50)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: password_hash
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: email
+                  type: varchar(100)
+              - column:
+                  name: is_active
+                  type: boolean
+                  defaultValue: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamp
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamp
+
+  - changeSet:
+      id: 2-create-roles-table
+      author: anilink
+      changes:
+        - createTable:
+            tableName: roles
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: role_code
+                  type: varchar(50)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: role_name
+                  type: varchar(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: text
+              - column:
+                  name: is_active
+                  type: boolean
+                  defaultValue: true
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 3-create-user-roles-table
+      author: anilink
+      changes:
+        - createTable:
+            tableName: user_roles
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: user_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_user_roles_user_id
+                    references: users(id)
+              - column:
+                  name: role_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_user_roles_role_id
+                    references: roles(id)
+              - column:
+                  name: created_at
+                  type: timestamp
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: user_roles
+            columnNames: user_id, role_id
+            constraintName: uk_user_role
+
+  - changeSet:
+      id: 4-insert-initial-roles
+      author: anilink
+      preConditions:
+        - onFail: MARK_RAN
+      changes:
+        - sql:
+            sql: |
+              INSERT INTO roles (role_code, role_name, description, is_active)
+              VALUES 
+                ('admin', '管理员', '系统管理员，拥有所有权限', true),
+                ('user', '普通用户', '普通用户，拥有基础权限', true),
+                ('super-admin', '超级管理员', '超级管理员，拥有最高权限', true)
+            dbms: h2,postgresql
+
+  # ============================================
+  # 2. 系统配置表
+  # ============================================
+  - changeSet:
+      id: 5-create-site-config-table
+      author: anilink
+      changes:
+        - createTable:
+            tableName: site_config
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: config_key
+                  type: varchar(100)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: config_value
+                  type: text
+              - column:
+                  name: description
+                  type: varchar(500)
+              - column:
+                  name: created_at
+                  type: timestamp
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamp
+
+  - changeSet:
+      id: 6-insert-initial-site-config
+      author: anilink
+      preConditions:
+        - onFail: MARK_RAN
+      changes:
+        - sql:
+            sql: |
+              INSERT INTO site_config (config_key, config_value, description, created_at, updated_at)
+              VALUES 
+                ('site_name', 'AniLink Service', '站点名称', NOW(), NOW()),
+                ('site_description', '番剧识别与弹幕播放服务', '站点描述', NOW(), NOW()),
+                ('site_url', 'http://localhost:8081', '站点URL', NOW(), NOW()),
+                ('installed', 'false', '安装标记', NOW(), NOW())
+            dbms: h2,postgresql
+
+  # ============================================
+  # 3. 媒体库和媒体文件表
+  # ============================================
+  - changeSet:
+      id: 7-create-media-library-table
+      author: anilink
+      changes:
+        - createTable:
+            tableName: media_library
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: path
+                  type: VARCHAR(1024)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: VARCHAR(32)
+                  defaultValue: "OK"
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 8-create-media-file-table
+      author: anilink
+      changes:
+        - createTable:
+            tableName: media_file
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: library_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_media_file_library
+                    references: media_library(id)
+              - column:
+                  name: file_path
+                  type: VARCHAR(2048)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: file_name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: last_modified
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: size
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              # 来自Dandan匹配的字段
+              - column:
+                  name: episode_id
+                  type: varchar(255)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: anime_id
+                  type: bigint
+                  constraints:
+                    nullable: true
+              - column:
+                  name: anime_title
+                  type: varchar(500)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: episode_title
+                  type: varchar(500)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: match_status
+                  type: int
+                  constraints:
+                    nullable: false
+                  defaultValue: 0
+                  remarks: "匹配状态：0=未匹配, 1=已匹配, -1=尝试匹配但无结果"
+              # FFprobe提取的字段
+              - column:
+                  name: hash
+                  type: varchar(32)
+                  constraints:
+                    nullable: true
+                  remarks: "文件前16MB的MD5哈希值"
+              - column:
+                  name: duration
+                  type: bigint
+                  constraints:
+                    nullable: true
+                  remarks: "视频时长，单位毫秒"
+              - column:
+                  name: width
+                  type: int
+                  constraints:
+                    nullable: true
+                  remarks: "视频宽度（像素）"
+              - column:
+                  name: height
+                  type: int
+                  constraints:
+                    nullable: true
+                  remarks: "视频高度（像素）"
+              - column:
+                  name: aspect_ratio
+                  type: varchar(20)
+                  constraints:
+                    nullable: true
+                  remarks: "宽高比（如 16:9）"
+              - column:
+                  name: color_depth
+                  type: varchar(50)
+                  constraints:
+                    nullable: true
+                  remarks: "色彩深度（8-bit, 10-bit）"
+              - column:
+                  name: hdr_type
+                  type: varchar(50)
+                  constraints:
+                    nullable: true
+                  remarks: "HDR类型"
+              - column:
+                  name: color_space
+                  type: varchar(50)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: color_primaries
+                  type: varchar(50)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: fps
+                  type: float
+                  constraints:
+                    nullable: true
+                  remarks: "帧率"
+              - column:
+                  name: video_bitrate
+                  type: bigint
+                  constraints:
+                    nullable: true
+                  remarks: "视频比特率"
+              - column:
+                  name: video_codec
+                  type: varchar(100)
+                  constraints:
+                    nullable: true
+                  remarks: "视频编码（h264, hevc）"
+              - column:
+                  name: audio_codec
+                  type: varchar(100)
+                  constraints:
+                    nullable: true
+                  remarks: "音频编码（aac, flac）"
+              - column:
+                  name: container_format
+                  type: varchar(50)
+                  constraints:
+                    nullable: true
+                  remarks: "容器格式（MKV, MP4）"
+              - column:
+                  name: metadata_fetched
+                  type: boolean
+                  constraints:
+                    nullable: false
+                  defaultValue: false
+        - addUniqueConstraint:
+            tableName: media_file
+            columnNames: library_id, file_path
+            constraintName: uc_media_file_library_path
+
+  # ============================================
+  # 4. 动漫表（简化版，只保留API返回的字段）
+  # ============================================
+  - changeSet:
+      id: 9-create-anime-table
+      author: anilink
+      description: "Create anime table with only essential fields from API"
+      changes:
+        - createTable:
+            tableName: anime
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: anime_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uc_anime_id
+              - column:
+                  name: title
+                  type: VARCHAR(500)
+                  constraints:
+                    nullable: true
+                  remarks: "动漫标题（来自animeTitle）"
+              - column:
+                  name: type
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: true
+                  remarks: "动漫类型（TV/电影/OVA等）"
+              - column:
+                  name: image_url
+                  type: VARCHAR(1000)
+                  constraints:
+                    nullable: true
+                  remarks: "动漫封面图片URL"
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+        - createIndex:
+            tableName: anime
+            indexName: idx_anime_animeid
+            columns:
+              - column:
+                  name: anime_id
+
+  # ============================================
+  # 5. API缓存表
+  # ============================================
+  - changeSet:
+      id: 10-create-api-cache-table
+      author: anilink
+      description: "Create third-party API cache table"
+      changes:
+        - createTable:
+            tableName: api_cache
+            remarks: "第三方API缓存表"
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  remarks: "主键"
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: cache_key
+                  type: VARCHAR(255)
+                  remarks: "缓存键（唯一标识某个接口及其参数）"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: cache_value
+                  type: TEXT
+                  remarks: "缓存内容（JSON格式）"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: expire_time
+                  type: TIMESTAMP
+                  remarks: "过期时间"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  remarks: "创建时间"
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  remarks: "更新时间"
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: api_cache
+            columnNames: cache_key
+            constraintName: uniq_cache_key
+        - createIndex:
+            tableName: api_cache
+            indexName: idx_api_cache_expire_time
+            columns:
+              - column:
+                  name: expire_time

@@ -1,25 +1,9 @@
 databaseChangeLog:
+  # 综合初始化脚本：包含所有表的第一次初始化
   - include:
-      file: common/db.changelog-common-init.yaml
+      file: common/db.changelog-v1-init.yaml
       relativeToChangelogFile: true
-  - include:
-      file: common/db.changelog-users-init.yaml
-      relativeToChangelogFile: true
-  - include:
-      file: common/db.changelog-roles-init.yaml
-      relativeToChangelogFile: true
-  - include:
-      file: common/db.changelog-site-config-init.yaml
-      relativeToChangelogFile: true
-  - include:
-      file: common/db.changelog-anime-init.yaml
-      relativeToChangelogFile: true
-  - include:
-      file: common/db.changelog-api-cache.yaml
-      relativeToChangelogFile: true
-  - include:
-      file: common/db.changelog-media-metadata.yaml
-      relativeToChangelogFile: true
+  # 数据库特定的初始化脚本（如果需要）
   - include:
       file: h2/db.changelog-h2-init.yaml
       relativeToChangelogFile: true

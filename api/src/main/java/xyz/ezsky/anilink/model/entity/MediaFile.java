@@ -93,6 +93,11 @@ public class MediaFile {
     @Column(name = "metadata_fetched", nullable = false)
     private Boolean metadataFetched = false;
 
+    // 匹配状态：0=未匹配, 1=已匹配, -1=尝试匹配但无结果
+    @Enumerated(EnumType.ORDINAL)
+    @Column(name = "match_status", nullable = false)
+    private MatchStatus matchStatus = MatchStatus.UNMATCHED;
+
     @Column(name = "created_at", nullable = false, updatable = false, insertable = false, columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
     private Timestamp createdAt;
 

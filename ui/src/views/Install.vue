@@ -101,8 +101,8 @@ const steps = [
 
 <template>
   <v-app>
-    <v-main class="bg-grey-lighten-5">
-      <v-container class="fill-height d-flex align-center justify-center">
+    <v-main class="bg-grey-lighten-5 install-main">
+      <v-container class="fill-height d-flex justify-center install-container">
 
         <!-- 安装成功 -->
         <v-card v-if="success" class="elevation-2" width="100%" max-width="450">
@@ -221,7 +221,23 @@ const steps = [
 </template>
 
 <style scoped>
+.install-main {
+  overflow-y: auto;
+}
+
 .fill-height {
   min-height: 100vh;
+}
+
+.install-container {
+  align-items: flex-start;
+  padding-top: 24px;
+  padding-bottom: 24px;
+}
+
+@media (min-width: 960px) {
+  .install-container {
+    align-items: center;
+  }
 }
 </style>

@@ -193,9 +193,7 @@ public class AnimeService {
         }
 
         // 最后退避到本地已存 raw_json，兼容历史数据。
-        return animeRepository.findByAnimeId(animeId)
-                .map(Anime::getRawJson)
-                .orElse(null);
+        return null;
     }
 
     /**

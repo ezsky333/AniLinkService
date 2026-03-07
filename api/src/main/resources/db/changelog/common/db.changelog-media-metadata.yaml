@@ -140,3 +140,19 @@ databaseChangeLog:
             tableName: media_file
             columnName: updated_at
             newDataType: TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+
+  - changeSet:
+      id: add-match-status-to-media-file
+      author: anilink
+      description: "Add match status column for Dandan matching"
+      changes:
+        - addColumn:
+            tableName: media_file
+            columns:
+              - column:
+                  name: match_status
+                  type: int
+                  constraints:
+                    nullable: false
+                  defaultValue: 0
+                  remarks: "匹配状态：0=未匹配, 1=已匹配, -1=尝试匹配但无结果"

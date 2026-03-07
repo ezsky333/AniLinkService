@@ -34,11 +34,24 @@ public class MediaLibraryService {
      * @return 创建后的媒体库视图对象（包含数据库分配的 ID）
      */
     public MediaLibraryVO addLibrary(MediaLibraryDTO mediaLibraryDTO) {
+        return addLibrary(mediaLibraryDTO, true);
+    }
+
+    /**
+     * 添加一个新的媒体库，并根据参数决定是否在后台触发一次扫描。
+     *
+     * @param mediaLibraryDTO 用于创建媒体库的数据传输对象
+     * @param autoScan 是否在添加后自动触发扫描
+     * @return 创建后的媒体库视图对象（包含数据库分配的 ID）
+     */
+    public MediaLibraryVO addLibrary(MediaLibraryDTO mediaLibraryDTO, boolean autoScan) {
         MediaLibrary mediaLibrary = new MediaLibrary();
         BeanUtils.copyProperties(mediaLibraryDTO, mediaLibrary);
         MediaLibrary savedLibrary = mediaLibraryRepository.save(mediaLibrary);
-        // 添加后立即在后台触发一次扫描以索引新库中的文件
-        mediaScannerService.scanLibrary(savedLibrary);
+        // 只在自动扫描标记为 true 时才触发扫描
+        if (autoScan) {
+            mediaScannerService.scanLibrary(savedLibrary);
+        }
         MediaLibraryVO mediaLibraryVO = new MediaLibraryVO();
         BeanUtils.copyProperties(savedLibrary, mediaLibraryVO);
         // 将 Long ID 转换为 String
