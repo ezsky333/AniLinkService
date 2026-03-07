@@ -105,51 +105,44 @@ onMounted(() => {
         class="mb-3"
       />
 
-      <v-row v-else class="schedule-row">
-        <v-col
+      <div v-else-if="filteredBangumi.length > 0" class="schedule-grid">
+        <v-card
           v-for="anime in filteredBangumi"
           :key="anime.animeId"
-          class="schedule-col"
-          cols="6"
-          sm="4"
-          md="3"
-          lg="2"
-          xl="1"
+          class="schedule-card"
+          elevation="1"
+          @click="handleSelectAnime(anime.animeId)"
         >
-          <v-card class="schedule-card" elevation="1" @click="handleSelectAnime(anime.animeId)">
-            <div class="poster-wrap">
-              <v-img
-                :src="anime.imageUrl || 'https://assets.anixplayer.net/image/poster/default.jpg'"
-                :aspect-ratio="2 / 3"
-                class="poster-image"
-              />
+          <div class="poster-wrap">
+            <v-img
+              :src="anime.imageUrl || 'https://assets.anixplayer.net/image/poster/default.jpg'"
+              :aspect-ratio="2 / 3"
+              class="poster-image"
+            />
+          </div>
+          <v-card-text class="pa-3">
+            <div class="title-row">
+              <p class="anime-title">{{ anime.animeTitle }}</p>
+              <v-chip
+                v-if="anime.isOnAir"
+                color="green"
+                size="x-small"
+                variant="tonal"
+                class="on-air-chip"
+              >连载中</v-chip>
             </div>
-            <v-card-text class="pa-3">
-              <div class="title-row">
-                <p class="anime-title">{{ anime.animeTitle }}</p>
-                <v-chip
-                  v-if="anime.isOnAir"
-                  color="green"
-                  size="x-small"
-                  variant="tonal"
-                  class="ml-2"
-                >连载中</v-chip>
-              </div>
-              <div class="meta-row">
-                <span class="rating">
-                  <i class="fa-solid fa-star"></i>
-                  {{ Number(anime.rating || 0).toFixed(1) }}
-                </span>
-                <span v-if="anime.isRestricted" class="restricted">限制级</span>
-              </div>
-            </v-card-text>
-          </v-card>
-        </v-col>
+            <div class="meta-row">
+              <span class="rating">
+                <i class="fa-solid fa-star"></i>
+                {{ Number(anime.rating || 0).toFixed(1) }}
+              </span>
+              <span v-if="anime.isRestricted" class="restricted">限制级</span>
+            </div>
+          </v-card-text>
+        </v-card>
+      </div>
 
-        <v-col v-if="filteredBangumi.length === 0" cols="12">
-          <v-alert type="info" variant="tonal">该日暂无可展示的新番更新</v-alert>
-        </v-col>
-      </v-row>
+      <v-alert v-else type="info" variant="tonal">该日暂无可展示的新番更新</v-alert>
     </v-card-text>
   </v-card>
 </template>
@@ -170,6 +163,12 @@ onMounted(() => {
   margin-left: 6px;
   font-weight: 700;
   opacity: 0.85;
+}
+
+.schedule-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
 }
 
 .schedule-card {
@@ -211,6 +210,8 @@ onMounted(() => {
 }
 
 .anime-title {
+  flex: 1;
+  min-width: 0;
   font-size: 14px;
   font-weight: 600;
   color: #2e241e;
@@ -221,6 +222,11 @@ onMounted(() => {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.on-air-chip {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .meta-row {
@@ -244,12 +250,11 @@ onMounted(() => {
   font-weight: 600;
 }
 
-.schedule-row {
-  margin: 0 -4px;
-}
-
-.schedule-col {
-  padding: 4px;
+@media (min-width: 2560px) {
+  .schedule-grid {
+    max-width: 2200px;
+    margin-inline: auto;
+  }
 }
 
 @media (max-width: 600px) {
@@ -268,6 +273,10 @@ onMounted(() => {
 
   .meta-row {
     font-size: 11px;
+  }
+
+  .schedule-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   }
 
   .weekday-btn {

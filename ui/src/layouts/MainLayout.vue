@@ -13,7 +13,7 @@
 
         <!-- 中间导航菜单 -->
         <nav class="nav-menu">
-          <router-link to="/" class="nav-item" active-class="active">首页</router-link>
+          <router-link to="/" class="nav-item" exact-active-class="active">首页</router-link>
           <router-link to="/search" class="nav-item" active-class="active">发现</router-link>
           <a href="#" class="nav-item">库</a>
         </nav>
@@ -382,7 +382,7 @@ body {
   text-decoration: none;
   font-weight: 500;
   font-size: 0.95rem;
-  transition: 0.2s;
+  transition: color 0.2s ease, background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
   position: relative;
   padding: 8px 12px;
   margin: 0 -12px;
@@ -391,7 +391,9 @@ body {
 
 .nav-item:hover {
   color: var(--accent-red);
-  background: rgba(196, 93, 43, 0.08);
+  background: rgba(196, 93, 43, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(196, 93, 43, 0.2);
+  transform: translateY(-1px);
 }
 
 .nav-item::after {
@@ -401,7 +403,7 @@ body {
   left: 12px;
   right: 12px;
   width: auto;
-  height: 2px;
+  height: 3px;
   background: var(--accent-red);
   transform: scaleX(0);
   transition: transform 0.3s ease;
@@ -419,6 +421,13 @@ body {
 .nav-item.active {
   color: var(--accent-red);
   font-weight: 600;
+  background: rgba(196, 93, 43, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(196, 93, 43, 0.18);
+}
+
+.nav-item:focus-visible {
+  outline: 2px solid rgba(196, 93, 43, 0.45);
+  outline-offset: 2px;
 }
 
 /* Right Section */

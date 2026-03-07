@@ -10,6 +10,8 @@ import xyz.ezsky.anilink.repository.ApiCacheRepository;
 import xyz.ezsky.anilink.util.DandanClientUtil;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -52,14 +54,16 @@ public class DanmakuService {
         // 检查过期缓存（用于降级）
         Optional<ApiCache> staleCache = apiCacheRepository.findByCacheKey(cacheKey);
 
-        // 构建请求路径
+        // 构建请求路径和查询参数
         String path = "/api/v2/comment/" + episodeId;
+        Map<String, String> queryParams = null;
         if (Boolean.TRUE.equals(withRelated)) {
-            path += "?withRelated=true";
+            queryParams = new HashMap<>();
+            queryParams.put("withRelated", "true");
         }
 
         try {
-            ResponseEntity<String> response = dandanClientUtil.get(DANDAN_BASE, path);
+            ResponseEntity<String> response = dandanClientUtil.get(DANDAN_BASE, path, queryParams);
             String responseBody = response.getBody();
             
             if (response.getStatusCode().is2xxSuccessful() && StringUtils.hasText(responseBody)) {

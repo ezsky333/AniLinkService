@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import xyz.ezsky.anilink.service.SiteConfigService;
 
 import java.util.Date;
+import java.util.Map;
 import java.io.IOException;
 
 /**
@@ -44,7 +45,16 @@ public class DandanClientUtil {
     }
 
     public ResponseEntity<String> get(String baseUrl, String path) {
-        String url = combine(baseUrl, path);
+        return get(baseUrl, path, null);
+    }
+
+    public ResponseEntity<String> get(String baseUrl, String path, Map<String, String> queryParams) {
+        HttpUrl.Builder urlBuilder = HttpUrl.parse(combine(baseUrl, path)).newBuilder();
+        if (queryParams != null) {
+            queryParams.forEach(urlBuilder::addQueryParameter);
+        }
+        String url = urlBuilder.build().toString();
+        
         Request request = new Request.Builder()
                 .url(url)
                 .headers(buildHeaders(path))
