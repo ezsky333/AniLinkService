@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit;
  * 负责：
  * 1. 接收单个新增文件的匹配请求
  * 2. 将文件ID添加到队列
- * 3. 每30秒取出最多50个文件进行批量匹配
+ * 3. 每30秒取出最多20个文件进行批量匹配
  */
 @Log4j2
 @Service
@@ -47,7 +47,7 @@ public class MediaMatchQueueManager {
     private final Set<Long> matchQueue = new HashSet<>();
     private final ScheduledExecutorService scheduledExecutor = Executors.newScheduledThreadPool(1);
     private ScheduledFuture<?> scheduledTask;
-    private static final int BATCH_SIZE = 50;
+    private static final int BATCH_SIZE = 20;
     private static final int QUEUE_INTERVAL_SECONDS = 30;
 
     /**
