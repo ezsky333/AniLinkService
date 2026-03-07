@@ -28,7 +28,10 @@ class LiquibaseTableCreationTest {
         // 递归解析所有changelog yaml文件
         List<String> changelogFiles = List.of(
                 "db/changelog/db.changelog-master.yaml",
-                "db/changelog/common/db.changelog-common-init.yaml",
+            // 新版整合初始化脚本
+            "db/changelog/common/db.changelog-v1-init.yaml",
+            // 兼容旧版拆分脚本（存在则解析，不存在则跳过）
+            "db/changelog/common/db.changelog-common-init.yaml",
                 "db/changelog/h2/db.changelog-h2-init.yaml",
                 "db/changelog/pgsql/db.changelog-pgsql-init.yaml");
         Pattern tablePattern = Pattern.compile("tableName:\\s*([a-zA-Z0-9_\\-]+)");
