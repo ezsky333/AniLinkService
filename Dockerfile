@@ -12,6 +12,8 @@ RUN mkdir -p /app/config
 
 # 设置环境变量，用于用户指定媒体目录和配置目录
 ENV CONFIG_DIR=/app/config
+# 用户可通过 -e DANDAN_IMAGE_DIR=/your/path 显式指定 /images/dandan 映射目录
+ENV DANDAN_IMAGE_DIR=/images/dandan
 ADD api/target/ani-link-service.jar app.jar
 ENV LANG=C.UTF-8
 ENV LANGUAGE=C.UTF-8
@@ -19,5 +21,5 @@ ENV LC_ALL=C.UTF-8
 EXPOSE 8081
 
 # 运行程序主体
-ENTRYPOINT ["java","-Djava.security.egd=file:/dev/./urandom","-jar","/app.jar"]
+ENTRYPOINT ["sh","-c","java -Djava.security.egd=file:/dev/./urandom -Ddandan.image.dir=${DANDAN_IMAGE_DIR} -jar /app.jar"]
 
