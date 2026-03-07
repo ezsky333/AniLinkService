@@ -15,6 +15,9 @@ databaseChangeLog:
       file: common/db.changelog-anime-init.yaml
       relativeToChangelogFile: true
   - include:
+      file: common/db.changelog-api-cache.yaml
+      relativeToChangelogFile: true
+  - include:
       file: common/db.changelog-media-metadata.yaml
       relativeToChangelogFile: true
   - include:

@@ -1,5 +1,6 @@
 <script setup>
 import { useRouter } from 'vue-router'
+import ShinWeeklySchedule from '../components/anime/ShinWeeklySchedule.vue'
 
 const router = useRouter()
 
@@ -10,6 +11,8 @@ const goToAnime = (animeId) => {
 
 <template>
   <div class="home-container">
+    <ShinWeeklySchedule @select-anime="goToAnime" />
+
     <v-card class="elevation-2 mb-6">
       <v-card-title class="text-h5 bg-grey-lighten-4">
         <i class="fa-solid fa-star" style="margin-right: 12px; color: #ffc107;"></i>

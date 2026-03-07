@@ -127,4 +127,24 @@ public class AnimeController {
             return ApiResponseVO.fail(500, "原始JSON数据解析失败");
         }
     }
+
+    /**
+     * 获取新番列表原始JSON数据
+     *
+     * @return 新番原始JSON数据
+     */
+    @Operation(summary = "获取新番原始JSON数据", description = "代理弹弹 /api/v2/bangumi/shin，使用数据库缓存")
+    @GetMapping("/shin/raw-json")
+    public ApiResponseVO<Object> getShinRawJson() {
+        String rawJson = animeService.getShinRawJson();
+        if (rawJson == null) {
+            return ApiResponseVO.fail(404, "新番原始JSON数据不存在");
+        }
+        try {
+            Object json = new ObjectMapper().readValue(rawJson, Object.class);
+            return ApiResponseVO.success(json);
+        } catch (JsonProcessingException e) {
+            return ApiResponseVO.fail(500, "新番原始JSON数据解析失败");
+        }
+    }
 }
