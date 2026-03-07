@@ -7,6 +7,7 @@ import 'vuetify/styles'
 import '@mdi/font/css/materialdesignicons.css'
 import router from './router'
 import './style.css'
+import './styles/anime.css'
 import App from './App.vue'
 import { md3 } from 'vuetify/blueprints'
 

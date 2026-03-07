@@ -142,6 +142,18 @@ public class AnimeService {
     }
 
     /**
+     * 根据动漫ID获取原始JSON数据
+     *
+     * @param animeId 动漫ID
+     * @return 原始JSON数据
+     */
+    public String getRawJsonByAnimeId(Long animeId) {
+        return animeRepository.findByAnimeId(animeId)
+                .map(Anime::getRawJson)
+                .orElse(null);
+    }
+
+    /**
      * 将 Anime 实体转换为 AnimeVO
      *
      * @param anime 动漫实体

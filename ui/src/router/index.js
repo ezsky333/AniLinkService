@@ -3,11 +3,6 @@ import axios from 'axios'
 
 const routes = [
   {
-    path: '/',
-    name: 'Home',
-    component: () => import('../views/Home.vue')
-  },
-  {
     path: '/install',
     name: 'Install',
     component: () => import('../views/Install.vue')
@@ -17,6 +12,38 @@ const routes = [
     name: 'Admin',
     component: () => import('../views/Admin.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/',
+    component: () => import('../layouts/MainLayout.vue'),
+    children: [
+      {
+        path: '',
+        name: 'Home',
+        component: () => import('../views/Home.vue')
+      },
+      {
+        path: 'search',
+        name: 'Search',
+        component: () => import('../views/Search.vue')
+      },
+      {
+        path: 'anime/:animeId',
+        name: 'AnimeDetail',
+        component: () => import('../views/AnimeDetail.vue')
+      },
+      {
+        path: 'play/:videoId',
+        name: 'Player',
+        component: () => import('../views/Player.vue')
+      },
+      {
+        path: 'profile',
+        name: 'Profile',
+        component: () => import('../views/Profile.vue'),
+        meta: { requiresAuth: true }
+      }
+    ]
   }
 ]
 

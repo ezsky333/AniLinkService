@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5">
+    <title>葬送的芙莉莲 第二季 · 详情与观看</title>
+    <!-- Font Awesome 6 (免费图标库) 用于增强视觉 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+        }
+        body {
+            background: #f4f2ee;
+            padding: 24px 16px;
+        }
+        .page {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 32px;
+            box-shadow: 0 20px 40px -12px rgba(0,0,0,0.2);
+            overflow: hidden;
+            backdrop-filter: blur(2px);
+        }
+        .content {
+            padding: 32px 32px 40px;
+        }
+        /* 头部区域 */
+        .hero {
+            display: flex;
+            gap: 28px;
+            flex-wrap: wrap;
+            margin-bottom: 32px;
+        }
+        .poster {
+            flex: 0 0 auto;
+            width: 200px;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+            background: #e6e0d6;
+        }
+        .poster img {
+            width: 100%;
+            height: auto;
+            display: block;
+            object-fit: cover;
+            image-rendering: crisp-edges; /* 对于低分辨率图减少模糊 */
+        }
+        .info {
+            flex: 1;
+            min-width: 260px;
+        }
+        .title-main {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            line-height: 1.2;
+            color: #2e241e;
+            margin-bottom: 6px;
+        }
+        .title-sub {
+            font-size: 1rem;
+            color: #6b5f55;
+            border-left: 3px solid #b99a7e;
+            padding-left: 12px;
+            margin-bottom: 14px;
+        }
+        .rating-block {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            gap: 20px;
+            background: #faf7f3;
+            padding: 14px 18px;
+            border-radius: 28px;
+            margin: 16px 0 14px;
+        }
+        .rating-main {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .rating-main .score {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #c45d2b;
+        }
+        .rating-main .label {
+            color: #5f4e3c;
+            font-weight: 500;
+        }
+        .rating-others {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            color: #4e3f33;
+            font-size: 0.95rem;
+        }
+        .rating-others span {
+            background: #e9dfd3;
+            padding: 4px 10px;
+            border-radius: 40px;
+        }
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin: 8px 0 12px;
+        }
+        .badge {
+            background: #1e7b6b;
+            color: white;
+            font-weight: 600;
+            padding: 6px 16px;
+            border-radius: 40px;
+            font-size: 0.9rem;
+            letter-spacing: 0.3px;
+        }
+        .badge.air {
+            background: #a65634;
+        }
+        .fav-btn {
+            background: white;
+            border: 1.5px solid #c7b5a2;
+            color: #5a4a3a;
+            padding: 8px 24px;
+            border-radius: 40px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: default; /* 静态展示，无功能 */
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: 0.1s;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        }
+        .fav-btn i {
+            color: #f5b342;
+        }
+        /* 简介区 */
+        .synopsis {
+            background: #f3efe9;
+            border-radius: 24px;
+            padding: 24px;
+            margin: 24px 0 20px;
+        }
+        .quote {
+            font-size: 1.1rem;
+            color: #5b4b3a;
+            font-style: italic;
+            border-left: 4px solid #bb8f6b;
+            padding-left: 20px;
+            margin-bottom: 18px;
+            font-weight: 450;
+        }
+        .summary {
+            color: #2e2a26;
+            line-height: 1.6;
+            margin-bottom: 14px;
+            font-size: 0.98rem;
+        }
+        .staff-mini {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 32px;
+            margin: 16px 0 8px;
+            font-size: 0.95rem;
+        }
+        .staff-item {
+            color: #3e332b;
+        }
+        .staff-item strong {
+            color: #795d45;
+            margin-right: 6px;
+        }
+        .tag-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 16px 0 8px;
+        }
+        .tag {
+            background: #e2d7cc;
+            color: #3f332b;
+            padding: 5px 14px;
+            border-radius: 30px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: 0.1s;
+            border: 1px solid #cdbcab;
+        }
+        /* 分集区域 */
+        .episode-section {
+            margin: 36px 0 28px;
+        }
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            margin-bottom: 22px;
+        }
+        .tabs {
+            display: flex;
+            gap: 6px;
+            background: #efebe6;
+            padding: 4px;
+            border-radius: 50px;
+        }
+        .tab-btn {
+            background: transparent;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 40px;
+            font-weight: 600;
+            color: #5f5348;
+            cursor: pointer;
+            transition: 0.15s;
+            font-size: 0.95rem;
+        }
+        .tab-btn.active {
+            background: white;
+            color: #2b1f16;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .episode-count {
+            color: #8f7864;
+            font-weight: 500;
+            font-size: 1rem;
+        }
+        .episode-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .episode-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #faf8f5;
+            padding: 14px 20px;
+            border-radius: 60px;
+            border: 1px solid #e5d8cc;
+            transition: 0.1s;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .episode-card.today {
+            background: #fef7e9;
+            border-color: #dbaa7a;
+            box-shadow: 0 2px 10px rgba(210, 130, 60, 0.1);
+        }
+        .episode-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .episode-num {
+            font-weight: 700;
+            font-size: 1.2rem;
+            min-width: 80px;
+            color: #4e3a28;
+        }
+        .episode-title {
+            font-size: 1.05rem;
+            color: #2b221b;
+        }
+        .episode-meta {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            color: #8b745e;
+            font-size: 0.9rem;
+        }
+        .watch-btn {
+            background: #b3815b;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 40px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: default; /* 静态演示 */
+            transition: 0.1s;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            text-decoration: none;
+        }
+        .watch-btn i {
+            font-size: 0.9rem;
+        }
+        .watch-btn.disabled {
+            background: #c0b5ab;
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        .today-tag {
+            background: #c1662b;
+            color: white;
+            font-size: 0.7rem;
+            padding: 3px 10px;
+            border-radius: 40px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+        /* 预告片横向滚动 */
+        .trailer-row {
+            display: flex;
+            gap: 16px;
+            overflow-x: auto;
+            padding: 8px 0 20px;
+            scrollbar-width: thin;
+            scrollbar-color: #bdaa9a #f0e7de;
+        }
+        .trailer-card {
+            flex: 0 0 220px;
+            background: #ece3da;
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        .trailer-card img {
+            width: 100%;
+            height: 120px;
+            object-fit: cover;
+            background: #b0a392;
+        }
+        .trailer-info {
+            padding: 12px 14px;
+        }
+        .trailer-title {
+            font-weight: 700;
+            margin-bottom: 4px;
+            color: #2f281f;
+        }
+        .trailer-date {
+            font-size: 0.8rem;
+            color: #7b6856;
+        }
+        /* 相关作品卡片 */
+        .related-grid {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin: 16px 0 20px;
+        }
+        .related-card {
+            width: 160px;
+            background: #f4eee7;
+            border-radius: 20px;
+            padding: 12px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        .related-card img {
+            width: 60px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 10px;
+        }
+        .related-info h4 {
+            font-size: 1rem;
+            margin-bottom: 4px;
+            color: #342b23;
+        }
+        .related-info .rating {
+            color: #a5622d;
+            font-weight: 600;
+        }
+        /* 外部链接 */
+        .external-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin: 28px 0 12px;
+            border-top: 2px solid #eddccf;
+            padding-top: 28px;
+        }
+        .external-link {
+            background: #f0e5db;
+            color: #4e3d30;
+            padding: 10px 18px;
+            border-radius: 40px;
+            text-decoration: none;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.9rem;
+            border: 1px solid #d8c5b4;
+        }
+        .copyright {
+            color: #a28e7a;
+            font-size: 0.8rem;
+            margin-top: 16px;
+            text-align: center;
+            border-top: 1px dashed #dccfc3;
+            padding-top: 24px;
+        }
+        /* 响应式 */
+        @media (max-width: 700px) {
+            .content { padding: 20px; }
+            .hero { gap: 16px; }
+            .poster { width: 140px; }
+            .title-main { font-size: 1.8rem; }
+            .episode-card { border-radius: 30px; }
+            .episode-left { width: 100%; }
+            .watch-btn { width: 100%; justify-content: center; }
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+    <div class="content" id="app">
+        <!-- 全部数据将由JavaScript动态渲染，保证与提供的数据一致 -->
+    </div>
+</div>
+<script>
+(function() {
+    // --------------------------------------------------------------
+    // 硬编码给定数据 (仅保留必要字段，简化但完整)
+    const data = {
+        animeId: 18886,
+        animeTitle: "葬送的芙莉莲 第二季",
+        imageUrl: "https://assets.anixplayer.net/image/poster/medium/18886-7a12373754568d8c581ef7ccc4ffa028.jpg",
+        isOnAir: true,
+        airDay: 5,
+        isFavorited: false,
+        rating: 8.6,
+        ratingDetails: {
+            "弹弹play连载中评分": 9.55,
+            "Bangumi评分": 7.8,
+            "Anidb连载中评分": 8.51,
+            "Anidb完结后评分": 9.31,
+        },
+        summary: `「流泪道别并不适合我们，因为下次再见时会很难为情。」
+在勇者欣梅尔一行人击败魔王后的世界中，与欣梅尔等人一同为世界带来和平、活了千年以上的精灵魔法使──芙莉莲。
+在面对寿命已尽的欣梅尔之死时，因落下的泪水与心中涌现的情感，踏上了「理解人类之心的旅程」。在旅途中，她与曾由过去伙伴海塔抚养长大的魔法使费伦，以及同为伙伴艾冉的弟子、战士修塔尔克结伴同行，一同朝向灵魂长眠之地前进。
+在旅程中，与各种人们相遇交流，并与狡诈的魔族与魔物展开战斗。有时平静温柔，有时无聊琐碎，有时激烈动荡，有时直击心扉……所有的一切、每一个瞬间，都一点一滴地堆叠成三人无可取代的珍贵回忆。而在这趟旅程的终点，究竟等待着他们的会是什么？
+魔法使资格测试结束后，他们三人将再度启程──`,
+        intro: "原作: 山田钟人・阿部司（小学馆「周刊少年Sunday」连载中） / 导演: 北川朋哉 / 系列构成: 铃木智寻 / 动画制作: MADHOUSE",
+        metadata: [
+            "中文名: 葬送的芙莉莲 第二季",
+            "话数: 10",
+            "放送开始: 2026年1月16日",
+            "放送星期: 星期五",
+            "原作: 山田鐘人・アベツカサ（小学館「週刊少年サンデー」連載中）",
+            "导演: 北川朋哉",
+            "音乐: Evan Call",
+            "动画制作: MADHOUSE",
+            "Copyright: ©山田鐘人・アベツカサ／小学館／「葬送のフリーレン」製作委員会"
+        ],
+        episodes: [
+            { episodeId: 188860001, episodeTitle: "第29话 那我们走吧", episodeNumber: "29", airDate: "2026-01-16T00:00:00" },
+            { episodeId: 188860002, episodeTitle: "第30话 南方勇者", episodeNumber: "30", airDate: "2026-01-23T00:00:00" },
+            { episodeId: 188860003, episodeTitle: "第31话 喜欢的地方", episodeNumber: "31", airDate: "2026-01-30T00:00:00" },
+            { episodeId: 188860004, episodeTitle: "第32话 他人的故乡", episodeNumber: "32", airDate: "2026-02-06T00:00:00" },
+            { episodeId: 188860005, episodeTitle: "第33话 北部高原的物流", episodeNumber: "33", airDate: "2026-02-13T00:00:00" },
+            { episodeId: 188860006, episodeTitle: "第34话 讨伐委托", episodeNumber: "34", airDate: "2026-02-27T00:00:00" },
+            { episodeId: 188860007, episodeTitle: "第35话 神技的雷沃戴", episodeNumber: "35", airDate: "2026-03-07T00:00:00" },
+            { episodeId: 188869001, episodeTitle: "S1 ●●の魔法 第18回: 見た者を拘束する魔法", episodeNumber: "S1", airDate: "2026-01-19T00:00:00" },
+            { episodeId: 188869002, episodeTitle: "S2 ●●の魔法 第19回: 童心に還る魔法", episodeNumber: "S2", airDate: "2026-02-02T00:00:00" },
+            { episodeId: 188869003, episodeTitle: "S3 ●●の魔法 第20回: 心と体が入れ替わる魔法", episodeNumber: "S3", airDate: "2026-02-17T00:00:00" },
+            { episodeId: 188869004, episodeTitle: "S4 ●●の魔法 第21回: お洗濯の魔法", episodeNumber: "S4", airDate: "2026-03-02T00:00:00" },
+            { episodeId: 188869101, episodeTitle: "C1 Opening", episodeNumber: "C1", airDate: "2026-01-16T00:00:00" },
+            { episodeId: 188869102, episodeTitle: "C2 Ending", episodeNumber: "C2", airDate: "2026-01-16T00:00:00" }
+        ],
+        tags: [
+            { name: "TV" }, { name: "日本" }, { name: "奇幻" }, { name: "漫画改" }, { name: "2026年1月" },
+            { name: "MADHouse" }, { name: "治愈" }, { name: "公路片" }, { name: "葬送的芙莉莲" }
+        ],
+        onlineDatabases: [
+            { name: "Bangumi.tv", url: "https://bangumi.tv/subject/515759" },
+            { name: "MyAnimeList", url: "https://myanimelist.net/anime/59978" },
+            { name: "AniDB", url: "https://anidb.net/anime/18886" }
+        ],
+        trailers: [
+            { title: "PV 2", date: "2026-01-11", imageUrl: "https://assets.anixplayer.net/image/mal/video/18469-1768123835000.jpg" },
+            { title: "PV 1", date: "2025-11-20", imageUrl: "https://assets.anixplayer.net/image/mal/video/18114-1763645074000.jpg" },
+            { title: "PV (Teaser 1)", date: "2025-07-05", imageUrl: "https://assets.anixplayer.net/image/mal/video/17011-1751674752000.jpg" },
+            { title: "Announcement", date: "2024-09-28", imageUrl: "https://assets.anixplayer.net/image/mal/video/15756-1727524400000.jpg" }
+        ],
+        relateds: [
+            { animeTitle: "葬送的芙莉莲", imageUrl: "https://assets.anixplayer.net/image/poster/medium/17617-05e1f913a5646d8bc10446bcc1cfb8b3.jpg", rating: 8.9 }
+        ]
+    };
+
+    // 提取copyright
+    const copyright = data.metadata.find(m => m.startsWith("Copyright")) || "©山田鐘人・アベツカサ／小学館／「葬送のフリーレン」製作委員会";
+
+    // 工具函数：格式化日期 YYYY-MM-DD
+    function formatDate(iso) {
+        return iso ? iso.slice(0, 10) : '';
+    }
+
+    // 判断集数类型
+    function getEpisodeType(ep) {
+        const num = ep.episodeNumber;
+        if (/^\d+$/.test(num)) return 'main';
+        if (num.startsWith('S')) return 'special';
+        if (num.startsWith('C')) return 'credit';
+        return 'other';
+    }
+
+    // 今日固定为2026-03-07（与数据最新一集一致）
+    const TODAY = '2026-03-07';
+
+    // 全部主线集数
+    const mainEpisodes = data.episodes.filter(ep => getEpisodeType(ep) === 'main').sort((a,b) => a.episodeNumber - b.episodeNumber);
+    const specialEpisodes = data.episodes.filter(ep => getEpisodeType(ep) === 'special');
+    const creditEpisodes = data.episodes.filter(ep => getEpisodeType(ep) === 'credit');
+
+    // 渲染分集列表 (根据类型)
+    function renderEpisodes(type) {
+        let list = [];
+        if (type === 'main') list = [...mainEpisodes];
+        else if (type === 'special') list = [...specialEpisodes, ...creditEpisodes]; // 特典+OP/ED合并展示方便
+        else if (type === 'all') list = [...data.episodes].sort((a,b) => new Date(a.airDate) - new Date(b.airDate));
+
+        return list.map(ep => {
+            const epDate = formatDate(ep.airDate);
+            const isToday = epDate === TODAY;
+            const isMain = getEpisodeType(ep) === 'main';
+            const disabled = new Date(ep.airDate) > new Date(TODAY); // 未来集数置灰
+            const titleDisplay = ep.episodeTitle;
+            const numberDisplay = ep.episodeNumber;
+
+            return `
+                <div class="episode-card ${isToday ? 'today' : ''}">
+                    <div class="episode-left">
+                        <span class="episode-num">${numberDisplay.startsWith('S') ? '特典' : (numberDisplay.startsWith('C') ? '主题' : '第'+numberDisplay+'话')}</span>
+                        <span class="episode-title">${titleDisplay}</span>
+                        ${isToday ? '<span class="today-tag">今日更新</span>' : ''}
+                    </div>
+                    <div class="episode-meta">
+                        <span>${epDate}</span>
+                        <a href="#" class="watch-btn ${disabled ? 'disabled' : ''}" onclick="return false;"><i class="fa-regular fa-circle-play"></i> 观看</a>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // 完整页面HTML串
+    const html = `
+        <div class="hero">
+            <div class="poster">
+                <img src="${data.imageUrl}" alt="${data.animeTitle}" loading="lazy">
+            </div>
+            <div class="info">
+                <h1 class="title-main">${data.animeTitle}</h1>
+                <div class="title-sub">葬送のフリーレン (2026) · Frieren: Beyond Journey's End Season 2</div>
+                <div class="rating-block">
+                    <div class="rating-main">
+                        <span class="score">${data.ratingDetails['弹弹play连载中评分']}</span>
+                        <span class="label">弹弹连载</span>
+                    </div>
+                    <div class="rating-others">
+                        <span>🍙 Bangumi ${data.ratingDetails['Bangumi评分']}</span>
+                        <span>📀 AniDB ${data.ratingDetails['Anidb连载中评分']}</span>
+                    </div>
+                </div>
+                <div class="status-badge">
+                    <span class="badge"><i class="fa-regular fa-bell"></i> 放送中 · 每周五</span>
+                    <span class="badge air">更新 ${mainEpisodes.length}/${data.metadata.find(m=>m.startsWith('话数'))?.split(':')[1]?.trim() || '10'}</span>
+                    <span class="fav-btn"><i class="fa-regular fa-star"></i> 收藏</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="synopsis">
+            <div class="quote">“流泪道别并不适合我们，因为下次再见时会很难为情。”</div>
+            <div class="summary">${data.summary.replace(/\n/g, '<br>')}</div>
+            <div class="staff-mini">
+                <div class="staff-item"><strong>原作</strong> 山田钟人·阿部司</div>
+                <div class="staff-item"><strong>导演</strong> 北川朋哉</div>
+                <div class="staff-item"><strong>系列构成</strong> 铃木智寻</div>
+                <div class="staff-item"><strong>音乐</strong> Evan Call</div>
+                <div class="staff-item"><strong>动画制作</strong> MADHOUSE</div>
+            </div>
+            <div class="tag-list">
+                ${data.tags.slice(0,12).map(t => `<span class="tag">#${t.name}</span>`).join('')}
+            </div>
+        </div>
+
+        <!-- 分集区 动态选项卡 -->
+        <div class="episode-section">
+            <div class="section-header">
+                <div class="tabs" id="episodeTabs">
+                    <button class="tab-btn active" data-type="main">正片</button>
+                    <button class="tab-btn" data-type="special">特典/短片</button>
+                    <button class="tab-btn" data-type="all">全部</button>
+                </div>
+                <span class="episode-count">共${data.episodes.length}集 (主线${mainEpisodes.length})</span>
+            </div>
+            <div class="episode-list" id="episodeListContainer">
+                ${renderEpisodes('main')}
+            </div>
+        </div>
+
+        <!-- 预告片 -->
+        <h3 style="margin: 24px 0 10px; font-weight: 600;"><i class="fa-regular fa-clapperboard"></i> 预告片</h3>
+        <div class="trailer-row">
+            ${data.trailers.map(t => `
+                <div class="trailer-card">
+                    <img src="${t.imageUrl}" alt="${t.title}" loading="lazy">
+                    <div class="trailer-info">
+                        <div class="trailer-title">${t.title}</div>
+                        <div class="trailer-date">${t.date}</div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+
+        <!-- 相关作品 -->
+        <h3 style="margin: 24px 0 10px;">相关作品</h3>
+        <div class="related-grid">
+            ${data.relateds.map(r => `
+                <div class="related-card">
+                    <img src="${r.imageUrl}" alt="${r.animeTitle}">
+                    <div class="related-info">
+                        <h4>${r.animeTitle}</h4>
+                        <span class="rating">⭐ ${r.rating}</span>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+
+        <!-- 外部链接 -->
+        <div class="external-links">
+            ${data.onlineDatabases.map(db => `
+                <a class="external-link" href="${db.url}" target="_blank" rel="noopener"><i class="fa-regular fa-link"></i> ${db.name}</a>
+            `).join('')}
+        </div>
+
+        <div class="copyright">
+            ${copyright}
+        </div>
+    `;
+
+    const app = document.getElementById('app');
+    app.innerHTML = html;
+
+    // 选项卡切换逻辑
+    const tabs = document.querySelectorAll('.tab-btn');
+    const container = document.getElementById('episodeListContainer');
+    tabs.forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            tabs.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            const type = this.dataset.type;
+            let episodesHtml = '';
+            if (type === 'main') episodesHtml = renderEpisodes('main');
+            else if (type === 'special') episodesHtml = renderEpisodes('special');
+            else if (type === 'all') episodesHtml = renderEpisodes('all');
+            container.innerHTML = episodesHtml;
+        });
+    });
+
+})();
+</script>
+<!-- 说明：所有点击按钮均为静态展示，无实际跳转；收藏按钮仅作样式。 -->
+</body>
+</html>

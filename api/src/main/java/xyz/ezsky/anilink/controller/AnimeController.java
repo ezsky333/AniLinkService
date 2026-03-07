@@ -1,5 +1,6 @@
 package xyz.ezsky.anilink.controller;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -12,6 +13,8 @@ import xyz.ezsky.anilink.model.vo.PageVO;
 import xyz.ezsky.anilink.service.AnimeService;
 
 import java.util.List;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * 动漫管理接口
@@ -100,5 +103,28 @@ public class AnimeController {
             return ApiResponseVO.fail(404, "动漫不存在");
         }
         return ApiResponseVO.success(anime);
+    }
+
+    /**
+     * 根据动漫ID获取原始JSON数据
+     *
+     * @param animeId 动漫ID
+     * @return 原始JSON数据
+     */
+    @Operation(summary = "获取原始JSON数据", description = "根据动漫ID获取原始JSON数据")
+    @GetMapping("/{animeId}/raw-json")
+    public ApiResponseVO<Object> getRawJsonByAnimeId(
+            @Parameter(description = "动漫ID", required = true)
+            @PathVariable Long animeId) {
+        String rawJson = animeService.getRawJsonByAnimeId(animeId);
+        if (rawJson == null) {
+            return ApiResponseVO.fail(404, "原始JSON数据不存在");
+        }
+        try {
+            Object json = new ObjectMapper().readValue(rawJson, Object.class);
+            return ApiResponseVO.success(json);
+        } catch (JsonProcessingException e) {
+            return ApiResponseVO.fail(500, "原始JSON数据解析失败");
+        }
     }
 }
