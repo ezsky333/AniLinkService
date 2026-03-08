@@ -164,6 +164,15 @@ const DEFAULT_DANMAKU_SETTINGS = {
   visible: true,
 }
 
+const MOBILE_VIEWPORT_MAX_WIDTH = 768
+
+const isMobileViewport = () => {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false
+  }
+  return window.matchMedia(`(max-width: ${MOBILE_VIEWPORT_MAX_WIDTH}px)`).matches
+}
+
 const normalizeDanmakuSettings = (raw) => {
   if (!raw || typeof raw !== 'object') {
     return {}
@@ -731,15 +740,22 @@ const placeEpisodeControlBeforeScreenshot = () => {
   }
 }
 
-const buildDanmakuOptions = (danmakuData) => {
+const buildDanmakuOptions = (danmakuData, mobile) => {
   const persistedDanmakuSettings = loadDanmakuSettings()
+
+  // 仅在没有历史设置时降低移动端默认字号，避免覆盖用户已调过的配置。
+  const mobileDefaults = mobile && persistedDanmakuSettings.fontSize === undefined
+    ? { fontSize: 19 }
+    : {}
+
   return {
     ...DEFAULT_DANMAKU_SETTINGS,
+    ...mobileDefaults,
     ...persistedDanmakuSettings,
     danmuku: danmakuData,
     useWorker: true,
-    minWidth: 200,
-    maxWidth: 500,
+    minWidth: mobile ? 140 : 200,
+    maxWidth: mobile ? 320 : 500,
     filter: (danmu) => danmu.text && danmu.text.length < 200,
     beforeEmit: (danmu) => danmu.text && !!danmu.text.trim(),
   }
@@ -811,7 +827,12 @@ const buildSubtitleSettings = (subtitles) => {
   }]
 }
 
-const buildEpisodeControls = () => [
+const buildEpisodeControls = (mobile) => {
+  if (mobile) {
+    return []
+  }
+
+  return [
   {
     position: 'left',
     index: 9,
@@ -861,10 +882,12 @@ const buildEpisodeControls = () => [
     },
   },
 ]
+}
 
 const createPlayerInstance = async () => {
   const seq = ++playerRecreateSeq
   isSwitching.value = true
+  const mobile = isMobileViewport()
 
   const targetVideoId = String(videoId.value || '')
   const targetEpisodeId = String(episodeId.value || '')
@@ -893,10 +916,10 @@ const createPlayerInstance = async () => {
 
     destroyPlayerInstance()
 
-    const danmakuOptions = buildDanmakuOptions(danmakuData)
+    const danmakuOptions = buildDanmakuOptions(danmakuData, mobile)
     const subtitlePlugin = buildSubtitlePlugin(subtitles)
     const subtitleSettings = buildSubtitleSettings(subtitles)
-    const episodeControls = buildEpisodeControls()
+    const episodeControls = buildEpisodeControls(mobile)
 
     // 初始化 Artplayer
     art.value = new Artplayer({
@@ -907,23 +930,23 @@ const createPlayerInstance = async () => {
       isLive: false,
       muted: false,
       autoplay: false,
-      pip: true,
+      pip: !mobile,
       autoSize: false,
       autoMini: true,
-      screenshot: true,
+      screenshot: !mobile,
       setting: true,
       loop: false,
-      flip: true,
-      playbackRate: true,
-      aspectRatio: true,
+      flip: !mobile,
+      playbackRate: !mobile,
+      aspectRatio: !mobile,
       fullscreen: true,
-      fullscreenWeb: true,
+      fullscreenWeb: !mobile,
       miniProgressBar: true,
       mutex: true,
       backdrop: true,
       playsInline: true,
       autoPlayback: false,
-      airplay: true,
+      airplay: !mobile,
       theme: '#c45d2b',
       lang: 'zh-cn',
       moreVideoAttr: {
