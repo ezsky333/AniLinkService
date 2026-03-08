@@ -9,15 +9,16 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import xyz.ezsky.anilink.model.dto.MediaFileDTO;
 import xyz.ezsky.anilink.model.dto.UpdateMediaFileRequest;
+import xyz.ezsky.anilink.model.entity.MatchStatus;
 import xyz.ezsky.anilink.model.entity.MediaFile;
 import xyz.ezsky.anilink.model.entity.MediaLibrary;
+import xyz.ezsky.anilink.model.vo.MatchProgressVO;
+import xyz.ezsky.anilink.model.vo.MetadataProgressVO;
 import xyz.ezsky.anilink.model.vo.PageVO;
 import xyz.ezsky.anilink.repository.MediaFileRepository;
 import xyz.ezsky.anilink.repository.MediaLibraryRepository;
 
 import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
@@ -44,6 +45,12 @@ public class MediaFileService {
 
     @Autowired
     private MediaMetadataQueueManager metadataQueueManager;
+
+    @Autowired
+    private MediaSubtitleService mediaSubtitleService;
+
+    @Autowired
+    private MediaMatchQueueManager mediaMatchQueueManager;
 
     /**
      * 分页查询媒体文件
@@ -134,6 +141,61 @@ public class MediaFileService {
         return CompletableFuture.completedFuture(null);
     }
 
+    public MetadataProgressVO getMetadataProgress(Long libraryId) {
+        long totalFiles = libraryId == null ? mediaFileRepository.count() : mediaFileRepository.countByLibraryId(libraryId);
+        long metadataFetched = libraryId == null
+                ? mediaFileRepository.countByMetadataFetchedTrue()
+                : mediaFileRepository.countByLibraryIdAndMetadataFetchedTrue(libraryId);
+        
+        // 库级别的待处理数 = 总文件数 - 已获取元数据的文件数
+        long libraryPendingMetadata = Math.max(0, totalFiles - metadataFetched);
+
+        return MetadataProgressVO.builder()
+                .libraryId(libraryId)
+                .totalFiles(totalFiles)
+                .metadataFetched(metadataFetched)
+                .pendingMetadata(libraryPendingMetadata)
+            // queuePending 表示真实队列长度（不含正在执行中的线程）
+            .queuePending(metadataQueueManager.getQueueSize())
+                .activeThreads(metadataQueueManager.getActiveThreadCount())
+                .maxPoolSize(metadataQueueManager.getMaxPoolSize())
+                .totalSubmitted(metadataQueueManager.getTotalSubmitted())
+                .totalProcessed(metadataQueueManager.getTotalProcessed())
+                .failedTasks(metadataQueueManager.getTotalFailed())
+                .build();
+    }
+
+    public MatchProgressVO getMatchProgress(Long libraryId) {
+        long totalFiles = libraryId == null ? mediaFileRepository.count() : mediaFileRepository.countByLibraryId(libraryId);
+        long matched = libraryId == null
+                ? mediaFileRepository.countByMatchStatus(MatchStatus.MATCHED)
+                : mediaFileRepository.countByLibraryIdAndMatchStatus(libraryId, MatchStatus.MATCHED);
+        long noMatch = libraryId == null
+                ? mediaFileRepository.countByMatchStatus(MatchStatus.NO_MATCH_FOUND)
+                : mediaFileRepository.countByLibraryIdAndMatchStatus(libraryId, MatchStatus.NO_MATCH_FOUND);
+        
+        // 库级别的待处理匹配数 = 总文件数 - 已匹配的 - 无匹配的
+        long libraryPendingMatch = Math.max(0, totalFiles - matched - noMatch);
+
+        return MatchProgressVO.builder()
+                .libraryId(libraryId)
+                .totalFiles(totalFiles)
+                .matched(matched)
+                .noMatch(noMatch)
+                .pendingMatch(libraryPendingMatch)
+            // queuePending 表示真实队列长度（当前为全局匹配队列）
+            .queuePending(mediaMatchQueueManager.getQueueSize())
+                .activeBatches(mediaMatchQueueManager.getActiveBatches())
+                .batchSize(mediaMatchQueueManager.getBatchSize())
+                .queueIntervalSeconds(mediaMatchQueueManager.getQueueIntervalSeconds())
+                .totalEnqueued(mediaMatchQueueManager.getTotalEnqueued())
+                .totalProcessed(mediaMatchQueueManager.getTotalProcessed())
+                .totalMatched(mediaMatchQueueManager.getTotalMatched())
+                .totalNoMatch(mediaMatchQueueManager.getTotalNoMatch())
+                .failedTasks(mediaMatchQueueManager.getTotalFailed())
+                .build();
+    }
+
     /**
      * 删除媒体文件记录
      * 
@@ -144,6 +206,9 @@ public class MediaFileService {
         mediaFileRepository.findById(fileId).ifPresentOrElse(
                 mediaFile -> {
                     String filePath = mediaFile.getFilePath();
+
+                    // 删除抽取的字幕文件和字幕记录
+                    mediaSubtitleService.cleanupByMediaFileId(mediaFile.getId());
                     
                     // 删除数据库记录
                     mediaFileRepository.delete(mediaFile);

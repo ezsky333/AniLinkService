@@ -6,6 +6,7 @@ import xyz.ezsky.anilink.repository.base.BaseRepository;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -13,6 +14,18 @@ import java.util.Optional;
 public interface MediaFileRepository extends BaseRepository<MediaFile, Long> {
     List<MediaFile> findByLibraryId(Long libraryId);
     Optional<MediaFile> findByFilePath(String filePath);
+
+    long countByLibraryId(Long libraryId);
+
+    long countByMetadataFetchedTrue();
+
+    long countByLibraryIdAndMetadataFetchedTrue(Long libraryId);
+
+    long countByMatchStatus(MatchStatus matchStatus);
+
+    long countByAnimeId(Long animeId);
+
+    long countByLibraryIdAndMatchStatus(Long libraryId, MatchStatus matchStatus);
 
     // 新的分页查询，按数据库ID排序由调用方的 Pageable 决定
     Page<MediaFile> findByAnimeId(Long animeId, Pageable pageable);
@@ -32,4 +45,7 @@ public interface MediaFileRepository extends BaseRepository<MediaFile, Long> {
     default List<MediaFile> findByLibraryIdAndMatchStatus(Long libraryId, MatchStatus[] matchStatuses) {
         return findByLibraryIdAndMatchStatusIn(libraryId, java.util.Arrays.asList(matchStatuses));
     }
+
+    @Transactional
+    void deleteByLibraryId(Long libraryId);
 }

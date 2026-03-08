@@ -31,6 +31,9 @@ public class MediaMetadataQueueManager implements Closeable {
     private final int threadPoolSize;
     private final BlockingQueue<Runnable> taskQueue;
     private final ThreadPoolExecutor executor;
+    private final java.util.concurrent.atomic.AtomicLong totalSubmitted = new java.util.concurrent.atomic.AtomicLong(0);
+    private final java.util.concurrent.atomic.AtomicLong totalProcessed = new java.util.concurrent.atomic.AtomicLong(0);
+    private final java.util.concurrent.atomic.AtomicLong totalFailed = new java.util.concurrent.atomic.AtomicLong(0);
 
     public MediaMetadataQueueManager() {
         // 线程数：CPU 核心数，最多不超过 4 个（避免过多线程）
@@ -75,12 +78,14 @@ public class MediaMetadataQueueManager implements Closeable {
      * @throws RejectedExecutionException 若线程池已关闭
      */
     public void submitMetadataExtraction(MediaFile mediaFile, Path filePath, Consumer<MediaFile> callback) {
-        MetadataExtractionTask task = new MetadataExtractionTask(mediaFile, filePath, callback);
+        MetadataExtractionTask task = new MetadataExtractionTask(mediaFile, filePath, callback, totalProcessed, totalFailed);
         try {
             executor.execute(task);
+            totalSubmitted.incrementAndGet();
             log.debug("Submitted metadata extraction task for file: {}", filePath);
         } catch (RejectedExecutionException e) {
             log.error("Failed to submit metadata extraction task (executor shutdown?): {}", filePath, e);
+            totalFailed.incrementAndGet();
         }
     }
 
@@ -103,6 +108,18 @@ public class MediaMetadataQueueManager implements Closeable {
      */
     public int getMaxPoolSize() {
         return executor.getMaximumPoolSize();
+    }
+
+    public long getTotalSubmitted() {
+        return totalSubmitted.get();
+    }
+
+    public long getTotalProcessed() {
+        return totalProcessed.get();
+    }
+
+    public long getTotalFailed() {
+        return totalFailed.get();
     }
 
     /**
@@ -138,19 +155,31 @@ public class MediaMetadataQueueManager implements Closeable {
         private final MediaFile mediaFile;
         private final Path filePath;
         private final Consumer<MediaFile> callback;
+        private final java.util.concurrent.atomic.AtomicLong totalProcessed;
+        private final java.util.concurrent.atomic.AtomicLong totalFailed;
 
-        MetadataExtractionTask(MediaFile mediaFile, Path filePath, Consumer<MediaFile> callback) {
+        MetadataExtractionTask(MediaFile mediaFile, Path filePath, Consumer<MediaFile> callback,
+                               java.util.concurrent.atomic.AtomicLong totalProcessed,
+                               java.util.concurrent.atomic.AtomicLong totalFailed) {
             this.mediaFile = mediaFile;
             this.filePath = filePath;
             this.callback = callback;
+            this.totalProcessed = totalProcessed;
+            this.totalFailed = totalFailed;
         }
 
         @Override
         public void run() {
             // 实际提取逻辑由调用者（MediaMetadataEnricher）负责实现
             // 此处仅定义任务结构
-            if (callback != null) {
-                callback.accept(mediaFile);
+            try {
+                if (callback != null) {
+                    callback.accept(mediaFile);
+                }
+                totalProcessed.incrementAndGet();
+            } catch (Exception e) {
+                totalFailed.incrementAndGet();
+                throw e;
             }
         }
     }

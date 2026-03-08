@@ -3,12 +3,18 @@ package xyz.ezsky.anilink.service;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import xyz.ezsky.anilink.model.dto.MediaLibraryDTO;
+import xyz.ezsky.anilink.model.entity.MediaFile;
 import xyz.ezsky.anilink.model.entity.MediaLibrary;
 import xyz.ezsky.anilink.model.vo.MediaLibraryVO;
+import xyz.ezsky.anilink.repository.AnimeRepository;
+import xyz.ezsky.anilink.repository.MediaFileRepository;
 import xyz.ezsky.anilink.repository.MediaLibraryRepository;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 import xyz.ezsky.anilink.model.vo.PathVO;
 
@@ -26,6 +32,15 @@ public class MediaLibraryService {
 
     @Autowired
     private MediaScannerService mediaScannerService;
+
+    @Autowired
+    private MediaSubtitleService mediaSubtitleService;
+
+    @Autowired
+    private MediaFileRepository mediaFileRepository;
+
+    @Autowired
+    private AnimeRepository animeRepository;
 
     /**
      * 添加一个新的媒体库并在后台触发一次扫描以索引该库中的媒体文件。
@@ -50,7 +65,7 @@ public class MediaLibraryService {
         MediaLibrary savedLibrary = mediaLibraryRepository.save(mediaLibrary);
         // 只在自动扫描标记为 true 时才触发扫描
         if (autoScan) {
-            mediaScannerService.scanLibrary(savedLibrary);
+            mediaScannerService.scanLibraryAsync(savedLibrary);
         }
         MediaLibraryVO mediaLibraryVO = new MediaLibraryVO();
         BeanUtils.copyProperties(savedLibrary, mediaLibraryVO);
@@ -79,8 +94,33 @@ public class MediaLibraryService {
      *
      * @param id 要删除的媒体库的数据库 ID
      */
+    @Transactional
     public void deleteLibrary(Long id) {
         mediaScannerService.stopWatching(id);
+
+        // 先记录该媒体库关联的 animeId，后续用于清理无剧集的 anime 记录
+        List<MediaFile> libraryFiles = mediaFileRepository.findByLibraryId(id);
+        Set<Long> affectedAnimeIds = libraryFiles.stream()
+                .map(MediaFile::getAnimeId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toCollection(HashSet::new));
+
+        // 允许删除字幕物理文件，但不删除视频物理文件
+        for (MediaFile mediaFile : libraryFiles) {
+            mediaSubtitleService.cleanupByMediaFileId(mediaFile.getId());
+        }
+
+        // 删除媒体文件数据库记录
+        mediaFileRepository.deleteByLibraryId(id);
+
+        // 删除已无任何剧集文件关联的 anime 记录
+        Set<Long> orphanAnimeIds = affectedAnimeIds.stream()
+                .filter(animeId -> mediaFileRepository.countByAnimeId(animeId) == 0)
+                .collect(Collectors.toSet());
+        if (!orphanAnimeIds.isEmpty()) {
+            animeRepository.deleteByAnimeIdIn(orphanAnimeIds);
+        }
+
         mediaLibraryRepository.deleteById(id);
     }
 
@@ -93,7 +133,7 @@ public class MediaLibraryService {
      * @param id 媒体库的数据库 ID
      */
     public void scanLibrary(Long id) {
-        mediaLibraryRepository.findById(id).ifPresent(mediaScannerService::scanLibrary);
+        mediaLibraryRepository.findById(id).ifPresent(mediaScannerService::scanLibraryAsync);
     }
 
     /**

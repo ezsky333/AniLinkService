@@ -3,6 +3,9 @@ databaseChangeLog:
   - include:
       file: common/db.changelog-v1-init.yaml
       relativeToChangelogFile: true
+  - include:
+      file: common/db.changelog-v2-subtitle.yaml
+      relativeToChangelogFile: true
   # 数据库特定的初始化脚本（如果需要）
   - include:
       file: h2/db.changelog-h2-init.yaml

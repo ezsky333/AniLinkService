@@ -14,13 +14,17 @@ import org.springframework.web.bind.annotation.*;
 
 import cn.dev33.satoken.annotation.SaCheckRole;
 import xyz.ezsky.anilink.model.dto.MediaFileDTO;
+import xyz.ezsky.anilink.model.dto.MediaSubtitleDTO;
 import xyz.ezsky.anilink.model.dto.UpdateMediaFileRequest;
 import xyz.ezsky.anilink.model.entity.MediaFile;
 import xyz.ezsky.anilink.model.vo.ApiResponseVO;
+import xyz.ezsky.anilink.model.vo.MatchProgressVO;
+import xyz.ezsky.anilink.model.vo.MetadataProgressVO;
 import xyz.ezsky.anilink.model.vo.PageVO;
 import xyz.ezsky.anilink.model.vo.QueueStatusVO;
 import xyz.ezsky.anilink.service.MediaFileService;
 import xyz.ezsky.anilink.service.MediaMetadataQueueManager;
+import xyz.ezsky.anilink.service.MediaSubtitleService;
 
 import java.io.File;
 import java.io.IOException;
@@ -28,6 +32,7 @@ import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 
 /**
  * 媒体文件管理API
@@ -42,6 +47,9 @@ public class MediaFileController {
 
     @Autowired
     private MediaMetadataQueueManager metadataQueueManager;
+
+    @Autowired
+    private MediaSubtitleService mediaSubtitleService;
 
     @Operation(summary = "分页查询媒体文件列表", description = "查询媒体文件列表，支持按媒体库过滤")
     @SaCheckRole("super-admin")
@@ -67,6 +75,14 @@ public class MediaFileController {
             return ApiResponseVO.fail("媒体文件不存在");
         }
         return ApiResponseVO.success(dto);
+    }
+
+    @Operation(summary = "获取媒体文件字幕列表", description = "根据媒体文件ID查询已抽取的字幕流列表")
+    @GetMapping("/{id}/subtitles")
+    public ApiResponseVO<List<MediaSubtitleDTO>> getSubtitleListByMediaFileId(
+            @Parameter(description = "媒体文件ID")
+            @PathVariable Long id) {
+        return ApiResponseVO.success(mediaSubtitleService.listByMediaFileId(id));
     }
 
     @Operation(summary = "批量重新获取元数据", description = "对指定媒体库中的所有文件重新触发元数据提取（异步处理）")
@@ -118,12 +134,35 @@ public class MediaFileController {
     @SaCheckRole("super-admin")
     @GetMapping("/queue/status")
     public ApiResponseVO<QueueStatusVO> getQueueStatus() {
+        int queueSize = metadataQueueManager.getQueueSize();
+        int activeThreads = metadataQueueManager.getActiveThreadCount();
+
         QueueStatusVO status = QueueStatusVO.builder()
-                .pendingTasks(metadataQueueManager.getQueueSize())
-                .activeThreads(metadataQueueManager.getActiveThreadCount())
+            // pendingTasks 使用“队列中 + 执行中”口径，更符合“待处理”直觉
+            .pendingTasks(queueSize + activeThreads)
+            .activeThreads(activeThreads)
                 .maxPoolSize(metadataQueueManager.getMaxPoolSize())
+                .totalProcessed(metadataQueueManager.getTotalProcessed())
                 .build();
         return ApiResponseVO.success(status);
+    }
+
+    @Operation(summary = "查询元数据进度", description = "查询元数据处理总进度与元数据队列状态")
+    @SaCheckRole("super-admin")
+    @GetMapping("/queue/metadata-progress")
+    public ApiResponseVO<MetadataProgressVO> getMetadataProgress(
+            @Parameter(description = "媒体库ID，不提供则汇总全部")
+            @RequestParam(required = false) Long libraryId) {
+        return ApiResponseVO.success(mediaFileService.getMetadataProgress(libraryId));
+    }
+
+    @Operation(summary = "查询弹弹匹配进度", description = "查询弹弹匹配总进度与匹配队列状态")
+    @SaCheckRole("super-admin")
+    @GetMapping("/queue/match-progress")
+    public ApiResponseVO<MatchProgressVO> getMatchProgress(
+            @Parameter(description = "媒体库ID，不提供则汇总全部")
+            @RequestParam(required = false) Long libraryId) {
+        return ApiResponseVO.success(mediaFileService.getMatchProgress(libraryId));
     }
 
     @Operation(summary = "获取视频流", description = "根据媒体文件ID获取视频流，支持HTTP Range请求实现跳转播放")

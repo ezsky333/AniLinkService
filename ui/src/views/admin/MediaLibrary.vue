@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import axios from 'axios'
 
 const API_BASE = '/api'
@@ -14,10 +14,106 @@ const loadingPaths = ref(false)
 const showPathTree = ref(false)
 const rootPath = ref('/')
 
+// 进度追踪相关
+const progressData = ref({})
+const showProgress = ref({})
+const pollIntervals = ref({})
+
+// 获取进度数据（确保响应式）
+const getProgressData = (libraryId) => {
+  return progressData.value[libraryId]
+}
+
 const newLibrary = ref({
   name: '',
   path: ''
 })
+
+// 获取元数据进度
+const fetchMetadataProgress = async (libraryId) => {
+  try {
+    const res = await axios.get(`${API_BASE}/media-files/queue/metadata-progress`, {
+      params: { libraryId }
+    })
+    if (res.data?.code === 200) {
+      // 确保库的进度对象初始化
+      if (!progressData.value[libraryId]) {
+        progressData.value[libraryId] = { metadata: null, match: null }
+      }
+      // 直接赋值(Vue 3 的响应式自动处理)
+      progressData.value[libraryId].metadata = res.data.data
+    }
+  } catch (error) {
+    console.error('获取元数据进度失败:', error)
+  }
+}
+
+// 获取弹幕匹配进度
+const fetchMatchProgress = async (libraryId) => {
+  try {
+    const res = await axios.get(`${API_BASE}/media-files/queue/match-progress`, {
+      params: { libraryId }
+    })
+    if (res.data?.code === 200) {
+      // 确保库的进度对象初始化
+      if (!progressData.value[libraryId]) {
+        progressData.value[libraryId] = { metadata: null, match: null }
+      }
+      // 直接赋值(Vue 3 的响应式自动处理)
+      progressData.value[libraryId].match = res.data.data
+    }
+  } catch (error) {
+    console.error('获取匹配进度失败:', error)
+  }
+}
+
+// 启动进度轮询
+const startProgressPolling = (libraryId) => {
+  // 停止已有的轮询
+  if (pollIntervals.value[libraryId]) {
+    clearInterval(pollIntervals.value[libraryId])
+  }
+  
+  showProgress.value[libraryId] = true
+  
+  // 立刻获取一次进度
+  fetchMetadataProgress(libraryId)
+  fetchMatchProgress(libraryId)
+  
+  // 每5秒轮询一次
+  const interval = setInterval(() => {
+    fetchMetadataProgress(libraryId)
+    fetchMatchProgress(libraryId)
+  }, 5000)
+  
+  pollIntervals.value[libraryId] = interval
+}
+
+// 停止进度轮询
+const stopProgressPolling = (libraryId) => {
+  const interval = pollIntervals.value[libraryId]
+  if (interval) {
+    clearInterval(interval)
+    delete pollIntervals.value[libraryId]
+  }
+  showProgress.value[libraryId] = false
+}
+
+// 切换进度显示
+const toggleProgressDisplay = (libraryId) => {
+  const currentState = showProgress.value[libraryId] || false
+  showProgress.value[libraryId] = !currentState
+  
+  if (!currentState) {
+    // 展开时，如果没有轮询就启动轮询
+    if (!pollIntervals.value[libraryId]) {
+      startProgressPolling(libraryId)
+    }
+  } else {
+    // 收起时，停止轮询
+    stopProgressPolling(libraryId)
+  }
+}
 
 const fetchLibraries = async () => {
   loading.value = true
@@ -124,13 +220,15 @@ const deleteLibrary = async (id) => {
 const scanLibrary = async (id) => {
   scanning.value = true
   try {
-    const res = await axios.post(`${API_BASE}/media-library/scan/${id}`)
+    const res = await axios.post(`${API_BASE}/media-files/reprocess-metadata/${id}`)
     if (res.data?.code === 200) {
-      alert(res.data.msg || '扫描已触发')
+      alert(res.data.msg || '重新获取元数据已触发')
       await fetchLibraries()
+      // 启动进度轮询
+      startProgressPolling(id)
     }
   } catch (error) {
-    alert('扫描失败：' + (error.response?.data?.msg || '请稍后重试'))
+    alert('重新获取元数据失败：' + (error.response?.data?.msg || '请稍后重试'))
   } finally {
     scanning.value = false
   }
@@ -143,6 +241,8 @@ const rematchLibrary = async (id) => {
     if (res.data?.code === 200) {
       alert(res.data.msg || '弹幕重新匹配已触发')
       await fetchLibraries()
+      // 启动进度轮询
+      startProgressPolling(id)
     }
   } catch (error) {
     alert('重新匹配失败：' + (error.response?.data?.msg || '请稍后重试'))
@@ -152,17 +252,22 @@ const rematchLibrary = async (id) => {
 }
 
 const scanAll = async () => {
-  if (!confirm('确定要扫描所有媒体库吗？')) return
+  if (!confirm('确定要重新获取所有媒体库的元数据吗？')) return
 
   scanning.value = true
   try {
-    const res = await axios.post(`${API_BASE}/media-library/scan-all`)
-    if (res.data?.code === 200) {
-      alert(res.data.msg || '扫描已触发')
-      await fetchLibraries()
+    // 逐个为所有库提交重新获取元数据的任务
+    for (const lib of mediaLibraries.value) {
+      await axios.post(`${API_BASE}/media-files/reprocess-metadata/${lib.id}`)
     }
+    alert('所有媒体库的元数据重新获取已提交')
+    await fetchLibraries()
+    // 为所有库启动进度轮询
+    mediaLibraries.value.forEach(lib => {
+      startProgressPolling(lib.id)
+    })
   } catch (error) {
-    alert('扫描失败：' + (error.response?.data?.msg || '请稍后重试'))
+    alert('提交任务失败：' + (error.response?.data?.msg || '请稍后重试'))
   } finally {
     scanning.value = false
   }
@@ -199,6 +304,14 @@ const onPathSelect = (selected) => {
 onMounted(() => {
   fetchLibraries()
 })
+
+onUnmounted(() => {
+  // 清除所有轮询interval
+  Object.values(pollIntervals.value).forEach((interval) => {
+    clearInterval(interval)
+  })
+  pollIntervals.value = {}
+})
 </script>
 
 <template>
@@ -221,8 +334,8 @@ onMounted(() => {
           :disabled="scanning"
           @click="scanAll"
         >
-          <v-icon start>mdi-refresh</v-icon>
-          扫描所有
+          <v-icon start>mdi-database-refresh</v-icon>
+          重新获取所有元数据
         </v-btn>
       </v-card-text>
     </v-card>
@@ -234,50 +347,137 @@ onMounted(() => {
 
     <v-card v-else-if="mediaLibraries.length > 0">
       <v-list>
-        <v-list-item v-for="library in mediaLibraries" :key="library.id">
-          <template v-slot:prepend>
-            <v-icon color="primary" size="large">mdi-folder</v-icon>
-          </template>
-          <v-list-item-title class="font-weight-medium">{{ library.name }}</v-list-item-title>
-          <v-list-item-subtitle>{{ library.path }}</v-list-item-subtitle>
-          <template v-slot:append>
-            <v-chip :color="library.status === 'OK' ? 'success' : 'error'" size="small">
-              {{ library.status }}
-            </v-chip>
-            <v-btn
-              icon
-              variant="text"
-              color="info"
-              size="small"
-              :loading="scanning"
-              @click="scanLibrary(library.id)"
-            >
-              <v-icon>mdi-refresh</v-icon>
-              <v-tooltip activator="parent" location="top">扫描媒体库</v-tooltip>
-            </v-btn>
-            <v-btn
-              icon
-              variant="text"
-              color="success"
-              size="small"
-              :loading="scanning"
-              @click="rematchLibrary(library.id)"
-            >
-              <v-icon>mdi-sync</v-icon>
-              <v-tooltip activator="parent" location="top">重新匹配弹幕</v-tooltip>
-            </v-btn>
-            <v-btn
-              icon
-              variant="text"
-              color="error"
-              size="small"
-              @click="deleteLibrary(library.id)"
-            >
-              <v-icon>mdi-delete</v-icon>
-              <v-tooltip activator="parent" location="top">删除媒体库</v-tooltip>
-            </v-btn>
-          </template>
-        </v-list-item>
+        <template v-for="library in mediaLibraries" :key="library.id">
+          <v-list-item>
+            <template v-slot:prepend>
+              <v-icon color="primary" size="large">mdi-folder</v-icon>
+            </template>
+            <v-list-item-title class="font-weight-medium">{{ library.name }}</v-list-item-title>
+            <v-list-item-subtitle>{{ library.path }}</v-list-item-subtitle>
+            <template v-slot:append>
+              <v-chip :color="library.status === 'OK' ? 'success' : 'error'" size="small">
+                {{ library.status }}
+              </v-chip>
+              <v-btn
+                icon
+                variant="text"
+                color="info"
+                size="small"
+                :loading="scanning"
+                @click="scanLibrary(library.id)"
+              >
+                <v-icon>mdi-database-refresh</v-icon>
+                <v-tooltip activator="parent" location="top">重新获取元数据</v-tooltip>
+              </v-btn>
+              <v-btn
+                icon
+                variant="text"
+                color="success"
+                size="small"
+                :loading="scanning"
+                @click="rematchLibrary(library.id)"
+              >
+                <v-icon>mdi-sync</v-icon>
+                <v-tooltip activator="parent" location="top">重新匹配弹幕</v-tooltip>
+              </v-btn>
+              <v-btn
+                icon
+                variant="text"
+                color="warning"
+                size="small"
+                @click="toggleProgressDisplay(library.id)"
+              >
+                <v-icon>{{ showProgress[library.id] ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
+                <v-tooltip activator="parent" location="top">{{ showProgress[library.id] ? '隐藏' : '显示' }}进度</v-tooltip>
+              </v-btn>
+              <v-btn
+                icon
+                variant="text"
+                color="error"
+                size="small"
+                @click="deleteLibrary(library.id)"
+              >
+                <v-icon>mdi-delete</v-icon>
+                <v-tooltip activator="parent" location="top">删除媒体库</v-tooltip>
+              </v-btn>
+            </template>
+          </v-list-item>
+
+          <!-- 进度显示区域 -->
+          <v-expand-transition>
+            <div v-if="showProgress[library.id]">
+              <v-divider />
+              <v-card variant="flat" class="ma-2 pa-4" color="grey-lighten-5">
+                <!-- 元数据扫描进度 -->
+                <div v-if="progressData[library.id] && progressData[library.id].metadata" class="mb-6">
+                  <div class="d-flex justify-space-between align-center mb-2">
+                    <span class="font-weight-medium">
+                      <v-icon small>mdi-database-refresh</v-icon>
+                      元数据扫描进度
+                    </span>
+                    <span class="text-caption text-grey">
+                      {{ progressData[library.id].metadata.metadataFetched || 0 }} / {{ progressData[library.id].metadata.totalFiles || 0 }}
+                    </span>
+                  </div>
+                  <v-progress-linear
+                    :model-value="progressData[library.id].metadata.totalFiles > 0 ? Math.round((progressData[library.id].metadata.metadataFetched / progressData[library.id].metadata.totalFiles) * 100) : 0"
+                    height="6"
+                    color="info"
+                    class="mb-2"
+                  />
+                  <div class="text-caption text-grey">
+                    <div>队列待处理: {{ progressData[library.id].metadata.pendingMetadata || 0 }} · 活跃线程: {{ progressData[library.id].metadata.activeThreads || 0 }} / {{ progressData[library.id].metadata.maxPoolSize || 4 }}</div>
+                    <div v-if="progressData[library.id].metadata.totalSubmitted > 0">提交任务: {{ progressData[library.id].metadata.totalSubmitted }} · 已处理: {{ progressData[library.id].metadata.totalProcessed }} · 失败: {{ progressData[library.id].metadata.failedTasks || 0 }}</div>
+                  </div>
+                </div>
+                <div v-else class="mb-6 text-center text-grey">
+                  <v-icon small>mdi-clock-outline</v-icon>
+                  等待元数据扫描数据...
+                </div>
+
+                <!-- 弹幕匹配进度 -->
+                <div v-if="progressData[library.id] && progressData[library.id].match" class="mb-6">
+                  <div class="d-flex justify-space-between align-center mb-2">
+                    <span class="font-weight-medium">
+                      <v-icon small>mdi-sync</v-icon>
+                      弹幕匹配进度
+                    </span>
+                    <span class="text-caption text-grey">
+                      {{ progressData[library.id].match.matched || 0 }} / {{ progressData[library.id].match.totalFiles || 0 }}
+                    </span>
+                  </div>
+                  <v-progress-linear
+                    :model-value="progressData[library.id].match.totalFiles > 0 ? Math.round((progressData[library.id].match.matched / progressData[library.id].match.totalFiles) * 100) : 0"
+                    height="6"
+                    color="success"
+                    class="mb-2"
+                  />
+                  <div class="text-caption text-grey">
+                    <div>队列待处理: {{ progressData[library.id].match.pendingMatch || 0 }} · 活跃批次: {{ progressData[library.id].match.activeBatches || 0 }}</div>
+                    <div v-if="progressData[library.id].match.totalEnqueued > 0">入队: {{ progressData[library.id].match.totalEnqueued }} · 已匹配: {{ progressData[library.id].match.totalMatched }} · 无匹配: {{ progressData[library.id].match.totalNoMatch || 0 }} · 失败: {{ progressData[library.id].match.failedTasks || 0 }}</div>
+                  </div>
+                </div>
+                <div v-else class="text-center text-grey">
+                  <v-icon small>mdi-clock-outline</v-icon>
+                  等待弹幕匹配数据...
+                </div>
+
+                <v-divider class="my-4" />
+                
+                <div class="text-center">
+                  <v-btn 
+                    size="small" 
+                    variant="text" 
+                    color="primary"
+                    @click="showProgress[library.id] = false"
+                  >
+                    收起
+                  </v-btn>
+                </div>
+              </v-card>
+            </div>
+          </v-expand-transition>
+        </template>
       </v-list>
     </v-card>
 

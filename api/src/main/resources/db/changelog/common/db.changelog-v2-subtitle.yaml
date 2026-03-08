@@ -1,0 +1,93 @@
+databaseChangeLog:
+  - changeSet:
+      id: create-media-subtitle-table
+      author: anilink
+      description: "Create subtitle table for extracted MKV subtitle streams"
+      changes:
+        - createTable:
+            tableName: media_subtitle
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: media_file_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: stream_index
+                  type: INT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: track_name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: language
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: codec_name
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: subtitle_format
+                  type: VARCHAR(16)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: file_name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: file_path
+                  type: VARCHAR(2048)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: file_size
+                  type: BIGINT
+                  constraints:
+                    nullable: true
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+
+        - addForeignKeyConstraint:
+            baseTableName: media_subtitle
+            baseColumnNames: media_file_id
+            referencedTableName: media_file
+            referencedColumnNames: id
+            constraintName: fk_media_subtitle_media_file
+            onDelete: CASCADE
+
+        - addUniqueConstraint:
+            tableName: media_subtitle
+            columnNames: media_file_id, stream_index
+            constraintName: uk_media_subtitle_file_stream
+
+        - createIndex:
+            tableName: media_subtitle
+            indexName: idx_media_subtitle_file_id
+            columns:
+              - column:
+                  name: media_file_id

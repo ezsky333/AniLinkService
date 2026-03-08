@@ -11,7 +11,6 @@ import xyz.ezsky.anilink.repository.MediaLibraryRepository;
 import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -52,15 +51,13 @@ public class MediaScannerService {
     private MediaMetadataQueueManager metadataQueueManager;
 
     @Autowired
-    private MediaMatchBatchService mediaMatchBatchService;
-
-    @Autowired
-    private MediaMatchQueueManager matchQueueManager;
+    private MediaSubtitleService mediaSubtitleService;
 
     private final ExecutorService executorService = Executors.newFixedThreadPool(4);
     private final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
     private final Map<Path, ScheduledFuture<?>> scheduledTasks = new ConcurrentHashMap<>();
     private final Map<Long, WatchService> watchServices = new ConcurrentHashMap<>();
+    private final Map<Long, Map<WatchKey, Path>> watchKeyPaths = new ConcurrentHashMap<>();
 
     /**
      * 扫描所有已注册的媒体库。
@@ -70,8 +67,15 @@ public class MediaScannerService {
     public void scanAllLibraries() {
         List<MediaLibrary> libraries = mediaLibraryRepository.findAll();
         for (MediaLibrary library : libraries) {
-            executorService.submit(() -> scanLibrary(library));
+            scanLibraryAsync(library);
         }
+    }
+
+    /**
+     * 异步扫描指定媒体库。
+     */
+    public void scanLibraryAsync(MediaLibrary library) {
+        executorService.submit(() -> scanLibrary(library));
     }
 
     /**
@@ -124,6 +128,7 @@ public class MediaScannerService {
             // 删除数据库中已不存在的文件记录
             for (MediaFile mediaFile : existingFiles) {
                 if (!Files.exists(Paths.get(mediaFile.getFilePath()))) {
+                    mediaSubtitleService.cleanupByMediaFileId(mediaFile.getId());
                     mediaFileRepository.delete(mediaFile);
                     log.info("Removed deleted file: {}", mediaFile.getFilePath());
                 }
@@ -131,10 +136,6 @@ public class MediaScannerService {
 
             // 扫描完成后启动对该库的监听
             startWatching(library);
-
-            // 扫描完成后，触发批量匹配
-            mediaMatchBatchService.matchLibraryAsync(library.getId());
-            log.info("Triggered batch match for library: {}", library.getName());
 
         } catch (IOException e) {
             log.error("Error scanning library: " + library.getName(), e);
@@ -194,28 +195,62 @@ public class MediaScannerService {
      */
     private void startWatching(MediaLibrary library) {
         try {
+            // 避免重复监听造成资源泄漏
+            stopWatching(library.getId());
+
             WatchService watchService = FileSystems.getDefault().newWatchService();
             Path path = Paths.get(library.getPath());
-            path.register(watchService, StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY);
+            Map<WatchKey, Path> keyMap = new ConcurrentHashMap<>();
+            registerAllDirectories(path, watchService, keyMap);
+
             watchServices.put(library.getId(), watchService);
+            watchKeyPaths.put(library.getId(), keyMap);
 
             executorService.submit(() -> {
                 try {
                     WatchKey key;
                     while ((key = watchService.take()) != null) {
+                        Path watchedPath = keyMap.get(key);
+                        if (watchedPath == null) {
+                            key.reset();
+                            continue;
+                        }
+
                         for (WatchEvent<?> event : key.pollEvents()) {
+                            if (event.kind() == StandardWatchEventKinds.OVERFLOW) {
+                                continue;
+                            }
+
                             Path changedFile = (Path) event.context();
-                            Path fullPath = path.resolve(changedFile);
+                            Path fullPath = watchedPath.resolve(changedFile);
+
+                            if (event.kind() == StandardWatchEventKinds.ENTRY_CREATE && Files.isDirectory(fullPath)) {
+                                registerAllDirectories(fullPath, watchService, keyMap);
+                                continue;
+                            }
+
                             if (event.kind() == StandardWatchEventKinds.ENTRY_DELETE) {
                                 deleteFile(fullPath.toAbsolutePath().toString());
                             } else {
-                                scheduleFileProcessing(library, fullPath);
+                                if (!Files.isDirectory(fullPath)) {
+                                    scheduleFileProcessing(library, fullPath);
+                                }
                             }
                         }
-                        key.reset();
+
+                        if (!key.reset()) {
+                            keyMap.remove(key);
+                            if (keyMap.isEmpty()) {
+                                break;
+                            }
+                        }
                     }
                 } catch (InterruptedException e) {
                     log.info("Watch service interrupted for library: {}", library.getName());
+                } catch (ClosedWatchServiceException ignored) {
+                    log.info("Watch service closed for library: {}", library.getName());
+                } catch (IOException e) {
+                    log.error("Error registering watched directory for library: {}", library.getName(), e);
                 }
             });
             log.info("Started watching library: {}", library.getName());
@@ -235,11 +270,32 @@ public class MediaScannerService {
             try {
                 watchService.close();
                 watchServices.remove(libraryId);
+                watchKeyPaths.remove(libraryId);
                 log.info("Stopped watching library with id: {}", libraryId);
             } catch (IOException e) {
                 log.error("Error stopping watch service for library id: " + libraryId, e);
             }
         }
+    }
+
+    private void registerAllDirectories(Path root, WatchService watchService, Map<WatchKey, Path> keyMap) throws IOException {
+        if (!Files.exists(root) || !Files.isDirectory(root)) {
+            return;
+        }
+
+        Files.walkFileTree(root, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+                WatchKey key = dir.register(
+                        watchService,
+                        StandardWatchEventKinds.ENTRY_CREATE,
+                        StandardWatchEventKinds.ENTRY_DELETE,
+                        StandardWatchEventKinds.ENTRY_MODIFY
+                );
+                keyMap.put(key, dir);
+                return FileVisitResult.CONTINUE;
+            }
+        });
     }
 
     /**
@@ -297,6 +353,7 @@ public class MediaScannerService {
      */
     private void deleteFile(String filePath) {
         mediaFileRepository.findByFilePath(filePath).ifPresent(mediaFile -> {
+            mediaSubtitleService.cleanupByMediaFileId(mediaFile.getId());
             mediaFileRepository.delete(mediaFile);
             log.info("Removed deleted file: {}", filePath);
         });

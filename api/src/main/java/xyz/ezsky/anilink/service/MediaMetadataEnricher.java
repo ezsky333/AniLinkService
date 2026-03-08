@@ -37,6 +37,9 @@ public class MediaMetadataEnricher {
     @Autowired
     private MediaMatchQueueManager matchQueueManager;
 
+    @Autowired
+    private MediaSubtitleService mediaSubtitleService;
+
     /**
      * 异步提取并补充媒体文件的完整元数据
      * 
@@ -50,22 +53,18 @@ public class MediaMetadataEnricher {
 
         // 提交到异步队列
         queueManager.submitMetadataExtraction(mediaFile, filePath, updatedFile -> {
-            try {
-                enrichMediaFileSync(updatedFile);
-                // 在数据库中保存更新
-                mediaFileRepository.save(updatedFile);
-                log.info("Successfully enriched metadata for file: {}", updatedFile.getFilePath());
-                
-                // 元数据提取完成后，将文件添加到匹配队列
-                // 只有当hash已经生成时才添加到匹配队列
-                if (updatedFile.getHash() != null && !updatedFile.getHash().isEmpty()) {
-                    matchQueueManager.addToQueue(updatedFile.getId());
-                    log.debug("Added file {} to match queue after metadata enrichment", updatedFile.getId());
-                } else {
-                    log.warn("Hash not generated for file {}, skipping match queue", updatedFile.getFilePath());
-                }
-            } catch (Exception e) {
-                log.error("Error enriching metadata for file: {}", mediaFile.getFilePath(), e);
+            enrichMediaFileSync(updatedFile);
+            // 在数据库中保存更新
+            mediaFileRepository.save(updatedFile);
+            log.info("Successfully enriched metadata for file: {}", updatedFile.getFilePath());
+
+            // 元数据提取完成后，将文件添加到匹配队列
+            // 只有当hash已经生成时才添加到匹配队列
+            if (updatedFile.getHash() != null && !updatedFile.getHash().isEmpty()) {
+                matchQueueManager.addToQueue(updatedFile.getId());
+                log.debug("Added file {} to match queue after metadata enrichment", updatedFile.getId());
+            } else {
+                log.warn("Hash not generated for file {}, skipping match queue", updatedFile.getFilePath());
             }
         });
     }
@@ -100,7 +99,10 @@ public class MediaMetadataEnricher {
                 log.warn("Failed to calculate hash for file: {}", filePath);
             }
 
-            // 第三步：标记已获取元数据
+            // 第三步：针对 MKV 文件抽取内封字幕（图片字幕按原格式导出）
+            mediaSubtitleService.extractSubtitlesIfMkv(mediaFile);
+
+            // 第四步：标记已获取元数据
             mediaFile.setMetadataFetched(true);
 
             long duration = System.currentTimeMillis() - startTime;

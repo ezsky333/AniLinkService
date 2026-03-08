@@ -17,7 +17,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -49,6 +50,12 @@ public class MediaMatchQueueManager {
     private ScheduledFuture<?> scheduledTask;
     private static final int BATCH_SIZE = 20;
     private static final int QUEUE_INTERVAL_SECONDS = 30;
+    private final AtomicInteger activeBatches = new AtomicInteger(0);
+    private final AtomicLong totalEnqueued = new AtomicLong(0);
+    private final AtomicLong totalProcessed = new AtomicLong(0);
+    private final AtomicLong totalMatched = new AtomicLong(0);
+    private final AtomicLong totalNoMatch = new AtomicLong(0);
+    private final AtomicLong totalFailed = new AtomicLong(0);
 
     /**
      * 初始化队列处理任务
@@ -75,9 +82,33 @@ public class MediaMatchQueueManager {
      */
     public void addToQueue(Long mediaFileId) {
         synchronized (matchQueue) {
-            matchQueue.add(mediaFileId);
+            if (matchQueue.add(mediaFileId)) {
+                totalEnqueued.incrementAndGet();
+            }
             log.debug("Added file {} to match queue, current size: {}", mediaFileId, matchQueue.size());
         }
+    }
+
+    /**
+     * 将指定媒体库中满足条件的文件加入匹配队列。
+     * 
+     * @param libraryId 媒体库 ID
+     * @return 成功加入队列的文件数量
+     */
+    public int enqueueLibraryForRematch(Long libraryId) {
+        List<MediaFile> candidates = mediaFileRepository.findByLibraryIdAndMatchStatus(
+                libraryId,
+                new MatchStatus[]{MatchStatus.UNMATCHED, MatchStatus.NO_MATCH_FOUND}
+        );
+
+        int enqueued = 0;
+        for (MediaFile mediaFile : candidates) {
+            if (Boolean.TRUE.equals(mediaFile.getMetadataFetched())) {
+                addToQueue(mediaFile.getId());
+                enqueued++;
+            }
+        }
+        return enqueued;
     }
 
     /**
@@ -137,6 +168,7 @@ public class MediaMatchQueueManager {
         }
 
         log.info("Processing {} files from match queue", filesToProcess.size());
+        activeBatches.incrementAndGet();
 
         try {
             // 获取这些文件的完整信息
@@ -158,6 +190,9 @@ public class MediaMatchQueueManager {
 
         } catch (Exception e) {
             log.error("Error processing match queue", e);
+            totalFailed.incrementAndGet();
+        } finally {
+            activeBatches.decrementAndGet();
         }
     }
 
@@ -166,6 +201,7 @@ public class MediaMatchQueueManager {
      */
     private void processBatch(List<MediaFile> batch) {
         List<Map<String, Object>> fileInfos = new ArrayList<>();
+        List<MediaFile> requestFiles = new ArrayList<>();
 
         for (MediaFile mediaFile : batch) {
             // 检查文件是否存在
@@ -173,6 +209,8 @@ public class MediaMatchQueueManager {
                 log.warn("File no longer exists: {}", mediaFile.getFilePath());
                 mediaFile.setMatchStatus(MatchStatus.NO_MATCH_FOUND);
                 mediaFileRepository.save(mediaFile);
+                totalProcessed.incrementAndGet();
+                totalNoMatch.incrementAndGet();
                 continue;
             }
 
@@ -197,6 +235,7 @@ public class MediaMatchQueueManager {
                 mediaFile.getSize()
             );
             fileInfos.add(fileInfo);
+            requestFiles.add(mediaFile);
         }
 
         if (fileInfos.isEmpty()) {
@@ -208,9 +247,9 @@ public class MediaMatchQueueManager {
         List<MatchResult> matchResults = dandanMatchService.batchMatch(fileInfos);
 
         // 更新匹配结果
-        for (int i = 0; i < matchResults.size() && i < batch.size(); i++) {
+        for (int i = 0; i < matchResults.size() && i < requestFiles.size(); i++) {
             MatchResult result = matchResults.get(i);
-            MediaFile mediaFile = batch.get(i);
+            MediaFile mediaFile = requestFiles.get(i);
 
             try {
                 if (result.getSuccess() != null && result.getSuccess()) {
@@ -221,17 +260,27 @@ public class MediaMatchQueueManager {
                     mediaFile.setAnimeTitle(result.getAnimeTitle());
                     mediaFile.setEpisodeTitle(result.getEpisodeTitle());
                     log.info("Matched file {} -> episodeId: {}", mediaFile.getFilePath(), result.getEpisodeId());
+                    totalMatched.incrementAndGet();
                 } else {
                     // 匹配失败
                     mediaFile.setMatchStatus(MatchStatus.NO_MATCH_FOUND);
                     log.debug("No match found for file: {}", mediaFile.getFilePath());
+                    totalNoMatch.incrementAndGet();
                 }
 
                 mediaFileRepository.save(mediaFile);
+                totalProcessed.incrementAndGet();
 
             } catch (Exception e) {
                 log.error("Error updating match result for file: {}", mediaFile.getFilePath(), e);
+                totalFailed.incrementAndGet();
             }
+        }
+
+        if (matchResults.size() < requestFiles.size()) {
+            long notReturned = requestFiles.size() - matchResults.size();
+            totalFailed.addAndGet(notReturned);
+            log.warn("Match results size mismatch, missing {} results in current batch", notReturned);
         }
     }
 
@@ -242,5 +291,37 @@ public class MediaMatchQueueManager {
         synchronized (matchQueue) {
             return matchQueue.size();
         }
+    }
+
+    public int getActiveBatches() {
+        return activeBatches.get();
+    }
+
+    public int getBatchSize() {
+        return BATCH_SIZE;
+    }
+
+    public int getQueueIntervalSeconds() {
+        return QUEUE_INTERVAL_SECONDS;
+    }
+
+    public long getTotalEnqueued() {
+        return totalEnqueued.get();
+    }
+
+    public long getTotalProcessed() {
+        return totalProcessed.get();
+    }
+
+    public long getTotalMatched() {
+        return totalMatched.get();
+    }
+
+    public long getTotalNoMatch() {
+        return totalNoMatch.get();
+    }
+
+    public long getTotalFailed() {
+        return totalFailed.get();
     }
 }

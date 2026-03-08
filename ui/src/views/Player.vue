@@ -17,6 +17,12 @@
         <!-- 播放器容器 -->
         <div class="player-card">
           <div ref="artRef" class="artplayer-container"></div>
+          <div v-if="isSwitching" class="player-switching-overlay">
+            <div class="player-switching-content">
+              <div class="player-switching-spinner"></div>
+              <div class="player-switching-text">正在切换分集...</div>
+            </div>
+          </div>
         </div>
 
         <!-- 番剧信息部分 -->
@@ -92,6 +98,7 @@
         <button class="resource-cancel-btn" @click="closeResourceDialog">取消</button>
       </div>
     </div>
+
   </div>
 </template>
 
@@ -100,6 +107,7 @@ import { computed, ref, shallowRef, onMounted, onBeforeUnmount, watch } from 'vu
 import { useRoute, useRouter } from 'vue-router'
 import Artplayer from 'artplayer'
 import artplayerPluginDanmuku from 'artplayer-plugin-danmuku'
+import SubtitlesOctopus from 'libass-wasm'
 import AnimeHeroSection from '../components/anime/AnimeHeroSection.vue'
 import EpisodeListSection from '../components/anime/EpisodeListSection.vue'
 import TrailerCarousel from '../components/anime/TrailerCarousel.vue'
@@ -122,13 +130,23 @@ const error = ref(null)
 const isSummaryExpanded = ref(false)
 const isFavorited = ref(false)
 const showResourceDialog = ref(false)
+const isSwitching = ref(false)
 const selectedResources = ref([])
 const selectedEpisodeTitle = ref('')
 
 const artRef = ref(null)
 const art = shallowRef(null)
+const subtitleOctopus = ref(null)
+const tmpSubtitleOctopusSubUrl = ref('')
+
+const subtitlesOctopusWorkJsPath = '/js/JavascriptSubtitlesOctopus/subtitles-octopus-worker.js'
+const subtitlesOctopusWorkWasmPath = '/js/JavascriptSubtitlesOctopus/subtitles-octopus-worker.wasm'
+const subtitlesOctopusFonts = ['/static/SourceHanSansCN-Bold.woff2']
+let playerRecreateSeq = 0
 
 const DANMAKU_SETTINGS_STORAGE_KEY = 'anilink:danmaku:settings:v1'
+const AIR_DAY_MAP = { 0: '周日', 1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 7: '周日' }
+const STAFF_META_KEYS = ['原作', '导演', '音乐', '动画制作']
 
 const DEFAULT_DANMAKU_SETTINGS = {
   speed: 7,
@@ -195,6 +213,14 @@ const saveDanmakuSettings = (option) => {
   }
 }
 
+const fetchJson = async (url, options) => {
+  const response = await fetch(url, options)
+  if (!response.ok) {
+    throw new Error(`请求失败(${response.status}): ${url}`)
+  }
+  return response.json()
+}
+
 /**
  * 获取番剧数据
  */
@@ -205,25 +231,32 @@ const fetchAnimeData = async () => {
     loading.value = true
     error.value = null
 
-    const response = await fetch(`/api/animes/${animeId.value}/raw-json`)
-    const result = await response.json()
-    if (result.code === 200 && result.data && result.data.bangumi) {
-      animeData.value = result.data.bangumi
+    const [animeResp, episodesResp] = await Promise.allSettled([
+      fetchJson(`/api/animes/${animeId.value}/raw-json`),
+      fetchJson(`/api/animes/${animeId.value}/episodes?page=1&pageSize=9999`),
+    ])
+
+    if (animeResp.status === 'fulfilled' && animeResp.value.code === 200 && animeResp.value.data?.bangumi) {
+      animeData.value = animeResp.value.data.bangumi
+    } else {
+      animeData.value = null
     }
 
-    // 获取该番剧的所有剧集
-    try {
-      const episodesResponse = await fetch(`/api/animes/${animeId.value}/episodes?page=1&pageSize=9999`)
-      const episodesResult = await episodesResponse.json()
-      if (episodesResult.code === 200 && episodesResult.data && Array.isArray(episodesResult.data.content)) {
-        existingEpisodes.value = episodesResult.data.content
-      }
-    } catch {
+    if (episodesResp.status === 'fulfilled' && episodesResp.value.code === 200 && Array.isArray(episodesResp.value.data?.content)) {
+      existingEpisodes.value = episodesResp.value.data.content
+    } else {
       existingEpisodes.value = []
+    }
+
+    if (animeResp.status === 'rejected') {
+      throw animeResp.reason
+    }
+    if (!animeData.value) {
+      throw new Error('获取番剧信息失败')
     }
   } catch (err) {
     animeData.value = null
-    error.value = err.message
+    error.value = err?.message || '获取番剧数据失败'
   } finally {
     loading.value = false
   }
@@ -232,8 +265,6 @@ const fetchAnimeData = async () => {
 /**
  * Computed properties for anime display
  */
-const formatDate = (iso) => iso ? iso.slice(0, 10) : ''
-const todayStr = new Date().toISOString().slice(0, 10)
 const isFuture = (ep) => new Date(ep.airDate) > new Date()
 
 const getEpisodeType = (ep) => {
@@ -278,6 +309,21 @@ const playableEpisodeKeys = computed(() => {
   return set
 })
 
+const playableEpisodes = computed(() => {
+  const episodes = animeData.value?.episodes || []
+  return episodes.filter((ep) => {
+    if (!ep || isFuture(ep)) {
+      return false
+    }
+    return getEpisodeResources(ep.episodeId).length > 0
+  })
+})
+
+const getCurrentPlayableEpisodeIndex = () => {
+  const currentEpisodeKey = String(episodeId.value || '')
+  return playableEpisodes.value.findIndex((ep) => String(ep.episodeId) === currentEpisodeKey)
+}
+
 const titleInfo = computed(() => {
   const titles = animeData.value?.titles || []
   if (titles.length === 0) return { main: '', sub: '' }
@@ -289,15 +335,13 @@ const titleInfo = computed(() => {
 
 const airDayText = computed(() => {
   const day = animeData.value?.airDay
-  const dayMap = { 0: '周日', 1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 7: '周日' }
-  return dayMap[day] || ''
+  return AIR_DAY_MAP[day] || ''
 })
 
 const staffList = computed(() => {
   const meta = animeData.value?.metadata || []
-  const keys = ['原作', '导演', '音乐', '动画制作']
   return meta
-    .filter(item => keys.some(key => item.startsWith(key)))
+    .filter(item => STAFF_META_KEYS.some(key => item.startsWith(key)))
     .map(item => {
       const parts = item.split(':')
       if (parts.length >= 2) {
@@ -311,6 +355,104 @@ const copyrightText = computed(() => {
   const meta = animeData.value?.metadata || []
   return meta.find(m => m.startsWith('Copyright')) || ''
 })
+
+/**
+ * 根据videoId获取字幕文件列表
+ */
+const fetchSubtitles = async (videoId) => {
+  try {
+    if (!videoId) {
+      console.warn('videoId为空，无法获取字幕')
+      return []
+    }
+
+    console.log('[subtitle] request list start, videoId =', videoId)
+    const response = await fetch(`/api/media-files/${videoId}/subtitles?_ts=${Date.now()}`, {
+      cache: 'no-store',
+    })
+    if (!response.ok) {
+      throw new Error(`字幕接口返回状态: ${response.status}`)
+    }
+
+    const data = await response.json()
+    console.log('字幕API返回数据:', data)
+
+    // 处理后端ApiResponseVO格式返回
+    if (data.code === 200 && Array.isArray(data.data)) {
+      // 转换字幕数据为插件需要的格式
+      return data.data
+        .filter(subtitle => subtitle.subtitleFormat && subtitle.filePath)
+        .map(subtitle => ({
+          name: subtitle.trackName || `${subtitle.language || '未知语言'}`,
+          url: `/api/subtitles/${subtitle.id}/download`,
+          format: subtitle.subtitleFormat.toLowerCase()
+        }))
+    }
+
+    console.warn('字幕数据格式未知', data)
+    return []
+  } catch (error) {
+    console.error('获取字幕失败:', error)
+    return []
+  }
+}
+
+const applySubtitleTrack = (subtitle) => {
+  const octopus = subtitleOctopus.value
+  if (!octopus) {
+    return
+  }
+
+  try {
+    if (!subtitle?.url) {
+      if (typeof octopus.freeTrack === 'function') {
+        octopus.freeTrack()
+      }
+      tmpSubtitleOctopusSubUrl.value = ''
+      return
+    }
+
+    tmpSubtitleOctopusSubUrl.value = subtitle.url
+
+    // 先释放旧轨道，避免切集后沿用旧字幕
+    if (typeof octopus.freeTrack === 'function') {
+      octopus.freeTrack()
+    }
+    if (typeof octopus.setTrackByUrl === 'function') {
+      octopus.setTrackByUrl(subtitle.url)
+    }
+    if (typeof octopus.setSubUrl === 'function') {
+      octopus.setSubUrl(subtitle.url)
+    }
+  } catch (error) {
+    console.warn('字幕轨切换失败（可能实例已销毁）:', error)
+  }
+}
+
+const artplayerPluginAss = (options) => {
+  return (player) => {
+    const instance = new SubtitlesOctopus({
+      ...options,
+      video: player.template.$video,
+    })
+
+    if (instance.canvasParent) {
+      instance.canvasParent.style.zIndex = 20
+    }
+
+    player.on('destroy', () => {
+      instance.dispose()
+      subtitleOctopus.value = null
+    })
+
+    subtitleOctopus.value = instance
+
+    return {
+      name: 'artplayerPluginAss',
+      instance,
+    }
+  }
+}
 
 /**
  * 将弹弹play弹幕格式转换为Artplayer格式
@@ -440,14 +582,6 @@ const fetchDanmaku = async (episodeId) => {
   }
 }
 
-const goBack = () => {
-  if (animeId.value) {
-    router.push(`/anime/${animeId.value}`)
-    return
-  }
-  router.back()
-}
-
 /**
  * 根据episodeId获取可用资源
  */
@@ -462,18 +596,26 @@ const getEpisodeResources = (episodeId) => {
 /**
  * 选择资源并播放
  */
-const goToPlayer = (resource) => {
+const goToPlayer = async (resource) => {
   showResourceDialog.value = false
   selectedResources.value = []
+
+  const targetVideoId = String(resource.id)
+  const targetEpisodeId = String(resource.episodeId ?? '')
+
   // 更新当前播放的视频
-  router.push({
-    name: 'Player',
-    params: { videoId: String(resource.id) },
-    query: {
-      animeId: String(animeId.value),
-      episodeId: String(resource.episodeId ?? '')
-    }
-  })
+  try {
+    await router.push({
+      name: 'Player',
+      params: { videoId: targetVideoId },
+      query: {
+        animeId: String(animeId.value),
+        episodeId: targetEpisodeId
+      }
+    })
+  } catch (error) {
+    console.warn('router.push 异常，继续执行播放刷新:', error)
+  }
 }
 
 /**
@@ -510,6 +652,35 @@ const playEpisode = (ep) => {
   showResourceDialog.value = true
 }
 
+const jumpToEpisodeById = (targetEpisodeId) => {
+  const target = playableEpisodes.value.find((ep) => String(ep.episodeId) === String(targetEpisodeId))
+  if (!target) {
+    return false
+  }
+  playEpisode(target)
+  return true
+}
+
+const jumpToAdjacentEpisode = (delta) => {
+  const list = playableEpisodes.value
+  if (list.length === 0) {
+    return null
+  }
+
+  const currentIndex = getCurrentPlayableEpisodeIndex()
+  if (currentIndex === -1) {
+    return null
+  }
+
+  const nextIndex = currentIndex + delta
+  if (nextIndex < 0 || nextIndex >= list.length) {
+    return null
+  }
+
+  playEpisode(list[nextIndex])
+  return list[nextIndex]
+}
+
 /**
  * 切换收藏
  */
@@ -517,14 +688,52 @@ const toggleFavorite = () => {
   isFavorited.value = !isFavorited.value
 }
 
-onMounted(async () => {
-  // 获取番剧数据
-  await fetchAnimeData()
+const destroyPlayerInstance = () => {
+  if (art.value) {
+    try {
+      // art.destroy 会触发 plugin destroy，内部会 dispose SubtitlesOctopus
+      art.value.destroy(false)
+    } catch (error) {
+      console.warn('销毁播放器失败:', error)
+    }
+    art.value = null
+    subtitleOctopus.value = null
+    return
+  }
 
-  // 获取弹幕数据
-  const danmakuData = await fetchDanmaku(episodeId.value)
+  if (subtitleOctopus.value) {
+    try {
+      subtitleOctopus.value.dispose()
+    } catch (error) {
+      console.warn('销毁字幕实例失败:', error)
+    }
+    subtitleOctopus.value = null
+  }
+}
+
+const placeEpisodeControlBeforeScreenshot = () => {
+  if (!art.value?.template?.$controls) {
+    return
+  }
+
+  const controlsRoot = art.value.template.$controls
+  const rightGroup = controlsRoot.querySelector('.art-controls-right')
+  const screenshotControl = controlsRoot.querySelector('.art-control-screenshot')
+  const episodeLabel = controlsRoot.querySelector('.anilink-episode-control')
+  const episodeControl = episodeLabel?.closest('.art-control')
+
+  if (!rightGroup || !screenshotControl || !episodeControl) {
+    return
+  }
+
+  if (episodeControl.parentElement !== rightGroup || episodeControl.nextElementSibling !== screenshotControl) {
+    rightGroup.insertBefore(episodeControl, screenshotControl)
+  }
+}
+
+const buildDanmakuOptions = (danmakuData) => {
   const persistedDanmakuSettings = loadDanmakuSettings()
-  const danmakuOptions = {
+  return {
     ...DEFAULT_DANMAKU_SETTINGS,
     ...persistedDanmakuSettings,
     danmuku: danmakuData,
@@ -534,104 +743,298 @@ onMounted(async () => {
     filter: (danmu) => danmu.text && danmu.text.length < 200,
     beforeEmit: (danmu) => danmu.text && !!danmu.text.trim(),
   }
+}
 
-  // 初始化 Artplayer
-  art.value = new Artplayer({
-    container: artRef.value,
-    url: videoId.value ? `/api/media-files/stream/${videoId.value}` : '',
-    poster: '',
-    volume: 0.5,
-    isLive: false,
-    muted: false,
-    autoplay: false,
-    pip: true,
-    autoSize: false,
-    autoMini: true,
-    screenshot: true,
-    setting: true,
-    loop: false,
-    flip: true,
-    playbackRate: true,
-    aspectRatio: true,
-    fullscreen: true,
-    fullscreenWeb: true,
-    miniProgressBar: true,
-    mutex: true,
-    backdrop: true,
-    playsInline: true,
-    autoPlayback: false,
-    airplay: true,
-    theme: '#c45d2b',
-    lang: 'zh-cn',
-    moreVideoAttr: {
-      crossOrigin: 'anonymous',
-    },
-    plugins: [
-      artplayerPluginDanmuku(danmakuOptions),
+const buildSubtitlePlugin = (subtitles) => {
+  if (subtitles.length === 0) {
+    return null
+  }
+
+  tmpSubtitleOctopusSubUrl.value = subtitles[0].url
+  return artplayerPluginAss({
+    fonts: subtitlesOctopusFonts,
+    subUrl: subtitles[0].url,
+    fallbackFont: '/static/SourceHanSansCN-Bold.woff2',
+    workerUrl: subtitlesOctopusWorkJsPath,
+    wasmUrl: subtitlesOctopusWorkWasmPath,
+    timeOffset: 0,
+  })
+}
+
+const buildSubtitleSettings = (subtitles) => {
+  if (subtitles.length === 0) {
+    tmpSubtitleOctopusSubUrl.value = ''
+    return []
+  }
+
+  return [{
+    width: 220,
+    html: '字幕',
+    tooltip: '选择',
+    icon: '<span style="font-size:16px">CC</span>',
+    selector: [
+      {
+        html: '开启',
+        tooltip: '显示',
+        switch: true,
+        onSwitch: (item) => {
+          if (!subtitleOctopus.value) {
+            return item.switch
+          }
+
+          item.tooltip = item.switch ? '隐藏' : '显示'
+          if (item.switch) {
+            tmpSubtitleOctopusSubUrl.value = tmpSubtitleOctopusSubUrl.value || subtitles[0]?.url || ''
+            subtitleOctopus.value.freeTrack()
+          } else if (tmpSubtitleOctopusSubUrl.value) {
+            subtitleOctopus.value.setTrackByUrl(tmpSubtitleOctopusSubUrl.value)
+            if (typeof subtitleOctopus.value.setSubUrl === 'function') {
+              subtitleOctopus.value.setSubUrl(tmpSubtitleOctopusSubUrl.value)
+            }
+          }
+          return !item.switch
+        },
+      },
+      ...subtitles.map((subtitle, index) => ({
+        default: index === 0,
+        html: subtitle.name || `字幕 ${index + 1}`,
+        url: subtitle.url,
+      })),
     ],
-  })
+    onSelect: (item) => {
+      if (!item.url || !subtitleOctopus.value) {
+        return item.html
+      }
+      applySubtitleTrack({ url: item.url })
+      return item.html
+    },
+  }]
+}
 
-  // 监听播放器事件
-  art.value.on('ready', () => {
-    console.log('播放器已就绪')
-  })
+const buildEpisodeControls = () => [
+  {
+    position: 'left',
+    index: 9,
+    html: '<i class="mdi mdi-skip-previous" style="font-size:20px;line-height:1;"></i>',
+    tooltip: '播放上一集',
+    click: () => {
+      const prev = jumpToAdjacentEpisode(-1)
+      if (!prev && art.value?.notice) {
+        art.value.notice.show = '已是第一集'
+      }
+    },
+  },
+  {
+    position: 'left',
+    index: 11,
+    html: '<i class="mdi mdi-skip-next" style="font-size:20px;line-height:1;"></i>',
+    tooltip: '播放下一集',
+    click: () => {
+      const next = jumpToAdjacentEpisode(1)
+      if (!next && art.value?.notice) {
+        art.value.notice.show = '已是最后一集'
+      }
+    },
+  },
+  {
+    position: 'right',
+    index: 100,
+    html: '<span class="anilink-episode-control" style="font-size:13px;line-height:1">分集</span>',
+    tooltip: '选择分集',
+    selector: playableEpisodes.value.map((ep, index) => ({
+      default: String(ep.episodeId) === String(episodeId.value),
+      html: `第${ep.episodeNumber || index + 1}话 ${ep.episodeTitle || ''}`.trim(),
+      value: String(ep.episodeId || ''),
+      episodeId: String(ep.episodeId || ''),
+    })),
+    onSelect: (item) => {
+      const targetEpisodeId = item?.value || item?.episodeId || ''
+      console.warn('[episode-selector] select:', targetEpisodeId, item)
 
-  art.value.on('play', () => {
-    console.log('开始播放')
-  })
+      if (targetEpisodeId) {
+        const ok = jumpToEpisodeById(targetEpisodeId)
+        if (!ok && art.value?.notice) {
+          art.value.notice.show = '该分集暂无可播放资源'
+        }
+      }
+      return item?.html || '分集'
+    },
+  },
+]
 
-  art.value.on('pause', () => {
-    console.log('暂停播放')
-  })
+const createPlayerInstance = async () => {
+  const seq = ++playerRecreateSeq
+  isSwitching.value = true
 
-  art.value.on('error', (error) => {
-    console.error('播放器错误:', error)
-  })
+  const targetVideoId = String(videoId.value || '')
+  const targetEpisodeId = String(episodeId.value || '')
 
-  // 弹幕事件
-  art.value.on('artplayerPluginDanmuku:visible', (danmu) => {
-    
-  })
-
-  art.value.on('artplayerPluginDanmuku:loaded', (danmus) => {
-    console.log('已加载弹幕数:', danmus.length)
-  })
-
-  art.value.on('artplayerPluginDanmuku:config', (option) => {
-    saveDanmakuSettings(option)
-  })
-
-  art.value.on('artplayerPluginDanmuku:show', () => {
-    const option = art.value?.plugins?.artplayerPluginDanmuku?.option
-    if (option) {
-      saveDanmakuSettings({ ...option, visible: true })
+  if (!targetVideoId) {
+    if (seq === playerRecreateSeq) {
+      isSwitching.value = false
     }
-  })
+    return
+  }
 
-  art.value.on('artplayerPluginDanmuku:hide', () => {
-    const option = art.value?.plugins?.artplayerPluginDanmuku?.option
-    if (option) {
-      saveDanmakuSettings({ ...option, visible: false })
+  try {
+    // 记录旧播放器的全屏状态，重建后自动恢复
+    const prevArt = art.value
+    const restoreFullscreenWeb = Boolean(prevArt && prevArt.fullscreenWeb)
+    const restoreFullscreen = !restoreFullscreenWeb && Boolean(prevArt && prevArt.fullscreen)
+
+    // 先并行拉取数据，再销毁重建，减少全屏状态下的“卡住+晚退出”体感
+    const [danmakuData, subtitles] = await Promise.all([
+      fetchDanmaku(targetEpisodeId),
+      fetchSubtitles(targetVideoId),
+    ])
+    if (seq !== playerRecreateSeq) {
+      return
     }
-  })
 
-  art.value.on('artplayerPluginDanmuku:error', (error) => {
-    console.error('弹幕加载错误:', error)
-  })
+    destroyPlayerInstance()
+
+    const danmakuOptions = buildDanmakuOptions(danmakuData)
+    const subtitlePlugin = buildSubtitlePlugin(subtitles)
+    const subtitleSettings = buildSubtitleSettings(subtitles)
+    const episodeControls = buildEpisodeControls()
+
+    // 初始化 Artplayer
+    art.value = new Artplayer({
+      container: artRef.value,
+      url: `/api/media-files/stream/${targetVideoId}`,
+      poster: '',
+      volume: 0.5,
+      isLive: false,
+      muted: false,
+      autoplay: false,
+      pip: true,
+      autoSize: false,
+      autoMini: true,
+      screenshot: true,
+      setting: true,
+      loop: false,
+      flip: true,
+      playbackRate: true,
+      aspectRatio: true,
+      fullscreen: true,
+      fullscreenWeb: true,
+      miniProgressBar: true,
+      mutex: true,
+      backdrop: true,
+      playsInline: true,
+      autoPlayback: false,
+      airplay: true,
+      theme: '#c45d2b',
+      lang: 'zh-cn',
+      moreVideoAttr: {
+        crossOrigin: 'anonymous',
+      },
+      plugins: [
+        artplayerPluginDanmuku(danmakuOptions),
+        ...(subtitlePlugin ? [subtitlePlugin] : []),
+      ],
+      controls: episodeControls,
+      settings: subtitleSettings,
+    })
+    if (seq !== playerRecreateSeq) {
+      destroyPlayerInstance()
+      return
+    }
+
+    // 监听播放器事件
+    art.value.on('ready', () => {
+      console.log('播放器已就绪')
+      placeEpisodeControlBeforeScreenshot()
+
+      // 切集后自动恢复全屏状态
+      try {
+        if (restoreFullscreenWeb) {
+          art.value.fullscreenWeb = true
+        } else if (restoreFullscreen) {
+          art.value.fullscreen = true
+        }
+      } catch (error) {
+        console.warn('恢复全屏状态失败:', error)
+      }
+    })
+
+    art.value.on('play', () => {
+      console.log('开始播放')
+    })
+
+    art.value.on('pause', () => {
+      console.log('暂停播放')
+    })
+
+    art.value.on('error', (error) => {
+      console.error('播放器错误:', error)
+    })
+
+    // 弹幕事件
+    art.value.on('artplayerPluginDanmuku:visible', () => {
+
+    })
+
+    art.value.on('artplayerPluginDanmuku:loaded', (danmus) => {
+      console.log('已加载弹幕数:', danmus.length)
+    })
+
+    art.value.on('artplayerPluginDanmuku:config', (option) => {
+      saveDanmakuSettings(option)
+    })
+
+    art.value.on('artplayerPluginDanmuku:show', () => {
+      const option = art.value?.plugins?.artplayerPluginDanmuku?.option
+      if (option) {
+        saveDanmakuSettings({ ...option, visible: true })
+      }
+    })
+
+    art.value.on('artplayerPluginDanmuku:hide', () => {
+      const option = art.value?.plugins?.artplayerPluginDanmuku?.option
+      if (option) {
+        saveDanmakuSettings({ ...option, visible: false })
+      }
+    })
+
+    art.value.on('artplayerPluginDanmuku:error', (error) => {
+      console.error('弹幕加载错误:', error)
+    })
+  } finally {
+    if (seq === playerRecreateSeq) {
+      isSwitching.value = false
+    }
+  }
+}
+
+onMounted(async () => {
+  // 获取番剧数据
+  await fetchAnimeData()
+  await createPlayerInstance()
 })
 
 /**
- * 监听路由变化，当animeId改变时重新获取数据
+ * 监听路由变化：videoId 或 episodeId 任一变化都刷新播放态。
+ * - videoId 变化：切换视频源 + 刷新弹幕/字幕
+ * - episodeId 变化：刷新弹幕/字幕（即便视频源不变）
  */
-watch(() => route.params.videoId, async () => {
-  closeResourceDialog()
-  isSummaryExpanded.value = false
-  // 刷新弹幕
-  const danmakuData = await fetchDanmaku(episodeId.value)
-  if (art.value && art.value.plugins.artplayerPluginDanmuku) {
-    art.value.plugins.artplayerPluginDanmuku.setDanmuku(danmakuData)
+watch(
+  () => [String(route.params.videoId || ''), String(route.query.episodeId || '')],
+  async ([newVideoId, newEpisodeId], [oldVideoId, oldEpisodeId]) => {
+    closeResourceDialog()
+    isSummaryExpanded.value = false
+
+    if (newVideoId === oldVideoId && newEpisodeId === oldEpisodeId) {
+      return
+    }
+
+    try {
+      await createPlayerInstance()
+    } catch (error) {
+      console.error('重建播放器失败:', error)
+    }
   }
-})
+)
 
 watch(() => animeId.value, async () => {
   closeResourceDialog()
@@ -640,9 +1043,7 @@ watch(() => animeId.value, async () => {
 })
 
 onBeforeUnmount(() => {
-  if (art.value) {
-    art.value.destroy(false)
-  }
+  destroyPlayerInstance()
 })
 </script>
 
@@ -689,11 +1090,51 @@ onBeforeUnmount(() => {
 
 /* Player Card */
 .player-card {
+  position: relative;
   background: #fff;
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   margin-bottom: 28px;
+}
+
+.player-switching-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 25;
+  backdrop-filter: blur(2px);
+}
+
+.player-switching-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: #ffffff;
+}
+
+.player-switching-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: anilink-spin 0.9s linear infinite;
+}
+
+.player-switching-text {
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+}
+
+@keyframes anilink-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .artplayer-container {

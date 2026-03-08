@@ -116,7 +116,9 @@ docker run -d \
    -p 8081:8081 \
    -e DB_PROFILE=h2 \
    -e CONFIG_DIR=/app/config \
+   -e SUBTITLE_DIR=/app/subtitles \
    -v ./config:/app/config \
+   -v ./subtitles:/app/subtitles \
    anilink-service
 ```
 
@@ -138,6 +140,7 @@ docker run -d \
    - `GET /api/v2/comment/{episodeId}?withRelated=true`
 - 播放
    - `GET /api/media-files/stream/{id}`
+   - `GET /api/media-files/{id}/subtitles`
 
 ## API 文档
 
