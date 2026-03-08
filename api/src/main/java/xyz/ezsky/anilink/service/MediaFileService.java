@@ -19,8 +19,6 @@ import xyz.ezsky.anilink.repository.MediaFileRepository;
 import xyz.ezsky.anilink.repository.MediaLibraryRepository;
 
 import java.io.File;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -39,9 +37,6 @@ public class MediaFileService {
 
     @Autowired
     private MediaLibraryRepository mediaLibraryRepository;
-
-    @Autowired
-    private MediaMetadataEnricher mediaMetadataEnricher;
 
     @Autowired
     private MediaMetadataQueueManager metadataQueueManager;
@@ -131,11 +126,10 @@ public class MediaFileService {
             // 重置元数据标志
             file.setMetadataFetched(false);
             mediaFileRepository.save(file);
-            
-            // 提交到异步队列重新处理
-            Path filePath = Paths.get(file.getFilePath());
-            mediaMetadataEnricher.enrichMediaFileAsync(file, metadataQueueManager);
         }
+
+        // 触发后台处理器按批次从数据库拉取待处理任务
+        metadataQueueManager.triggerProcessing();
         
         log.info("Submitted {} files from library {} for metadata reprocessing", files.size(), libraryId);
         return CompletableFuture.completedFuture(null);
@@ -150,17 +144,24 @@ public class MediaFileService {
         // 库级别的待处理数 = 总文件数 - 已获取元数据的文件数
         long libraryPendingMetadata = Math.max(0, totalFiles - metadataFetched);
 
+        // DB 驱动模型下，UI 展示优先使用数据库快照口径，避免运行时累计计数与当前状态不一致。
+        long processedFromDb = metadataFetched;
+        long submittedFromDb = metadataFetched + libraryPendingMetadata;
+        int queuePending = libraryId == null
+                ? metadataQueueManager.getQueueSize()
+                : (int) Math.min(Integer.MAX_VALUE, libraryPendingMetadata);
+
         return MetadataProgressVO.builder()
                 .libraryId(libraryId)
                 .totalFiles(totalFiles)
                 .metadataFetched(metadataFetched)
                 .pendingMetadata(libraryPendingMetadata)
-            // queuePending 表示真实队列长度（不含正在执行中的线程）
-            .queuePending(metadataQueueManager.getQueueSize())
+            // DB 驱动：queuePending 直接代表数据库中待处理量（库级或全局）
+            .queuePending(queuePending)
                 .activeThreads(metadataQueueManager.getActiveThreadCount())
                 .maxPoolSize(metadataQueueManager.getMaxPoolSize())
-                .totalSubmitted(metadataQueueManager.getTotalSubmitted())
-                .totalProcessed(metadataQueueManager.getTotalProcessed())
+                .totalSubmitted(submittedFromDb)
+                .totalProcessed(processedFromDb)
                 .failedTasks(metadataQueueManager.getTotalFailed())
                 .build();
     }

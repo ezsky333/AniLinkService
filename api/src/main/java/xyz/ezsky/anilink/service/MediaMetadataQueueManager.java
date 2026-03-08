@@ -1,46 +1,70 @@
 package xyz.ezsky.anilink.service;
 
 import lombok.extern.log4j.Log4j2;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import xyz.ezsky.anilink.repository.MediaFileRepository;
 import xyz.ezsky.anilink.model.entity.MediaFile;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 
 import java.io.Closeable;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.concurrent.*;
-import java.util.function.Consumer;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.Set;
 
 /**
- * 媒体元数据异步提取队列管理器
- * 
- * 负责管理元数据提取的异步队列，实现：
- * - 高效的线程池管理（避免过多线程导致内存溢出）
- * - 队列化处理（FIFO）
- * - 优先级支持（可选，当前采用 FIFO）
- * - 优雅的队列关闭
- * 
- * 设计原则：
- * 1. 使用固定大小线程池（不超过可用处理器数）
- * 2. 阻塞队列，防止内存无限增长
- * 3. 提交任务时若队列满则调用者阻塞等待
+ * 媒体元数据后台处理管理器（DB 驱动）。
+ *
+ * 设计目标：新增文件只负责落库，不直接堆积内存任务；
+ * 由后台按批次从数据库拉取 metadataFetched=false 的文件并并发处理。
  */
 @Log4j2
 @Service
 public class MediaMetadataQueueManager implements Closeable {
 
+    @Autowired
+    private MediaFileRepository mediaFileRepository;
+
+    @Autowired
+    private MediaMetadataEnricher mediaMetadataEnricher;
+
     private final int threadPoolSize;
     private final BlockingQueue<Runnable> taskQueue;
     private final ThreadPoolExecutor executor;
+    private final ScheduledExecutorService dispatcher = Executors.newSingleThreadScheduledExecutor();
+    private final AtomicBoolean immediateDispatchScheduled = new AtomicBoolean(false);
+    private final Set<Long> inFlightIds = ConcurrentHashMap.newKeySet();
     private final java.util.concurrent.atomic.AtomicLong totalSubmitted = new java.util.concurrent.atomic.AtomicLong(0);
     private final java.util.concurrent.atomic.AtomicLong totalProcessed = new java.util.concurrent.atomic.AtomicLong(0);
     private final java.util.concurrent.atomic.AtomicLong totalFailed = new java.util.concurrent.atomic.AtomicLong(0);
+    private final int queueCapacity;
 
-    public MediaMetadataQueueManager() {
-        // 线程数：CPU 核心数，最多不超过 4 个（避免过多线程）
-        this.threadPoolSize = Math.min(Runtime.getRuntime().availableProcessors(), 4);
-        
-        // 任务队列最多 500 个任务，防止队列无限增长导致内存问题
-        this.taskQueue = new LinkedBlockingQueue<>(500);
+    @Value("${anilink.metadata.dispatch-interval-seconds:5}")
+    private int dispatchIntervalSeconds;
+
+    @Value("${anilink.metadata.dispatch-batch-size:20}")
+    private int dispatchBatchSize;
+
+    public MediaMetadataQueueManager(
+            @Value("${anilink.metadata.thread-pool-size:0}") int configuredThreadPoolSize,
+            @Value("${anilink.metadata.max-thread-pool-size:4}") int maxThreadPoolSize,
+            @Value("${anilink.metadata.queue-capacity:500}") int queueCapacity) {
+        int availableProcessors = Runtime.getRuntime().availableProcessors();
+        int safeDefault = Math.min(Math.max(availableProcessors, 2), 4);
+        int boundedMax = Math.max(1, maxThreadPoolSize);
+        int desired = configuredThreadPoolSize > 0 ? configuredThreadPoolSize : safeDefault;
+
+        // 可通过配置覆盖，默认至少 2 线程，避免容器核数过低导致长期单线程堆积。
+        this.threadPoolSize = Math.max(1, Math.min(desired, boundedMax));
+
+        this.queueCapacity = Math.max(50, queueCapacity);
+
+        // 执行队列有界，保护内存。
+        this.taskQueue = new LinkedBlockingQueue<>(this.queueCapacity);
 
         // 创建线程池
         this.executor = new ThreadPoolExecutor(
@@ -56,36 +80,100 @@ public class MediaMetadataQueueManager implements Closeable {
                     @Override
                     public Thread newThread(Runnable r) {
                         Thread t = new Thread(r);
-                        t.setName("MediaMetadataExtractor-" + count.incrementAndGet());
+                        t.setName("dataExtractor-" + count.incrementAndGet());
                         t.setDaemon(false);
                         return t;
                     }
                 },
-                new CallerWaitsRejectionPolicy()  // 队列满时，调用者线程阻塞等待
+                new ThreadPoolExecutor.AbortPolicy()  // 调度线程感知饱和后稍后重试
         );
 
-        log.info("MediaMetadataQueueManager initialized with {} threads, queue capacity: 500", threadPoolSize);
+        log.info("MediaMetadataQueueManager initialized with {} threads, queue capacity: {}, cpu cores: {}",
+                threadPoolSize, this.queueCapacity, availableProcessors);
+    }
+
+    @PostConstruct
+    public void init() {
+        dispatcher.scheduleAtFixedRate(
+                this::dispatchFromDatabase,
+                dispatchIntervalSeconds,
+                dispatchIntervalSeconds,
+                TimeUnit.SECONDS
+        );
+        log.info("Metadata dispatcher started with interval: {}s, batchSize: {}", dispatchIntervalSeconds, dispatchBatchSize);
+    }
+
+    @PreDestroy
+    public void destroy() {
+        close();
     }
 
     /**
-     * 提交元数据提取任务到队列
-     * 
-     * 如果队列满，调用者线程会阻塞等待。这确保不会有无限制的任务堆积。
-     * 
-     * @param mediaFile 待提取元数据的 MediaFile 实体
-     * @param filePath  文件完整路径
-     * @param callback  提取完成后的回调（接收更新后的 MediaFile）
-     * @throws RejectedExecutionException 若线程池已关闭
+     * 仅触发一次尽快调度，不在调用线程里做重活。
      */
-    public void submitMetadataExtraction(MediaFile mediaFile, Path filePath, Consumer<MediaFile> callback) {
-        MetadataExtractionTask task = new MetadataExtractionTask(mediaFile, filePath, callback, totalProcessed, totalFailed);
-        try {
-            executor.execute(task);
-            totalSubmitted.incrementAndGet();
-            log.debug("Submitted metadata extraction task for file: {}", filePath);
-        } catch (RejectedExecutionException e) {
-            log.error("Failed to submit metadata extraction task (executor shutdown?): {}", filePath, e);
-            totalFailed.incrementAndGet();
+    public void triggerProcessing() {
+        scheduleImmediateDispatch();
+    }
+
+    private void scheduleImmediateDispatch() {
+        if (!immediateDispatchScheduled.compareAndSet(false, true)) {
+            return;
+        }
+
+        dispatcher.execute(() -> {
+            try {
+                dispatchFromDatabase();
+            } finally {
+                immediateDispatchScheduled.set(false);
+            }
+        });
+    }
+
+    private void dispatchFromDatabase() {
+        if (executor.isShutdown()) {
+            return;
+        }
+
+        int availableSlots = threadPoolSize + queueCapacity - executor.getActiveCount() - taskQueue.size();
+        if (availableSlots <= 0) {
+            return;
+        }
+
+        int fetchSize = Math.max(1, Math.min(dispatchBatchSize, availableSlots));
+        int querySize = Math.max(fetchSize * 3, fetchSize);
+        var page = mediaFileRepository.findByMetadataFetchedFalse(
+            PageRequest.of(0, querySize, Sort.by(Sort.Direction.ASC, "id"))
+        );
+
+        if (page.isEmpty()) {
+            return;
+        }
+
+        int submitted = 0;
+        for (MediaFile mediaFile : page.getContent()) {
+            if (submitted >= fetchSize) {
+                break;
+            }
+
+            Long mediaFileId = mediaFile.getId();
+            if (mediaFileId == null || !inFlightIds.add(mediaFileId)) {
+                continue;
+            }
+
+            try {
+                executor.execute(new MetadataExtractionTask(mediaFile));
+                totalSubmitted.incrementAndGet();
+                submitted++;
+            } catch (RejectedExecutionException ignored) {
+                // 执行队列已满，等待下一轮调度。
+                inFlightIds.remove(mediaFileId);
+                break;
+            }
+        }
+
+        // 如果本轮拿满，通常说明仍有积压，继续快速调度一次。
+        if (submitted >= fetchSize) {
+            scheduleImmediateDispatch();
         }
     }
 
@@ -93,7 +181,7 @@ public class MediaMetadataQueueManager implements Closeable {
      * 获取队列中待处理的任务数
      */
     public int getQueueSize() {
-        return taskQueue.size();
+        return (int) mediaFileRepository.countByMetadataFetchedFalse();
     }
 
     /**
@@ -107,7 +195,7 @@ public class MediaMetadataQueueManager implements Closeable {
      * 获取线程池最大线程数
      */
     public int getMaxPoolSize() {
-        return executor.getMaximumPoolSize();
+        return threadPoolSize;
     }
 
     public long getTotalSubmitted() {
@@ -132,6 +220,7 @@ public class MediaMetadataQueueManager implements Closeable {
     public void close() {
         try {
             log.info("Shutting down MediaMetadataQueueManager...");
+            dispatcher.shutdownNow();
             executor.shutdown();
             
             // 等待已提交的任务完成，最多 30 秒
@@ -151,55 +240,51 @@ public class MediaMetadataQueueManager implements Closeable {
     /**
      * 内部任务类：封装单个文件的元数据提取任务
      */
-    static class MetadataExtractionTask implements Runnable {
+    class MetadataExtractionTask implements Runnable {
         private final MediaFile mediaFile;
-        private final Path filePath;
-        private final Consumer<MediaFile> callback;
-        private final java.util.concurrent.atomic.AtomicLong totalProcessed;
-        private final java.util.concurrent.atomic.AtomicLong totalFailed;
 
-        MetadataExtractionTask(MediaFile mediaFile, Path filePath, Consumer<MediaFile> callback,
-                               java.util.concurrent.atomic.AtomicLong totalProcessed,
-                               java.util.concurrent.atomic.AtomicLong totalFailed) {
+        MetadataExtractionTask(MediaFile mediaFile) {
             this.mediaFile = mediaFile;
-            this.filePath = filePath;
-            this.callback = callback;
-            this.totalProcessed = totalProcessed;
-            this.totalFailed = totalFailed;
         }
 
         @Override
         public void run() {
-            // 实际提取逻辑由调用者（MediaMetadataEnricher）负责实现
-            // 此处仅定义任务结构
+            Long mediaFileId = mediaFile.getId();
             try {
-                if (callback != null) {
-                    callback.accept(mediaFile);
+                mediaMetadataEnricher.enrichMediaFileSync(mediaFile);
+                if (mediaFileId != null) {
+                    mediaFileRepository.findById(mediaFileId).ifPresent(latest -> {
+                        mergeMetadataFields(mediaFile, latest);
+                        mediaFileRepository.save(latest);
+                    });
                 }
                 totalProcessed.incrementAndGet();
             } catch (Exception e) {
                 totalFailed.incrementAndGet();
-                throw e;
+                log.error("Metadata extraction task failed for file: {}", mediaFile.getFilePath(), e);
+            } finally {
+                if (mediaFileId != null) {
+                    inFlightIds.remove(mediaFileId);
+                }
             }
         }
     }
 
-    /**
-     * 自定义拒绝策略：队列满时让调用者线程等待
-     * 
-     * 这种策略可以有效防止任务无限堆积，使得调用者在队列满时阻塞。
-     */
-    static class CallerWaitsRejectionPolicy implements RejectedExecutionHandler {
-        @Override
-        public void rejectedExecution(Runnable r, ThreadPoolExecutor executor) {
-            try {
-                // 直接添加到队列，如果队列满则阻塞等待
-                executor.getQueue().put(r);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new RejectedExecutionException("Interrupted while waiting to put task in queue", e);
-            }
-        }
+    private void mergeMetadataFields(MediaFile source, MediaFile target) {
+        target.setDuration(source.getDuration());
+        target.setWidth(source.getWidth());
+        target.setHeight(source.getHeight());
+        target.setAspectRatio(source.getAspectRatio());
+        target.setColorDepth(source.getColorDepth());
+        target.setHdrType(source.getHdrType());
+        target.setColorSpace(source.getColorSpace());
+        target.setColorPrimaries(source.getColorPrimaries());
+        target.setVideoBitrate(source.getVideoBitrate());
+        target.setFps(source.getFps());
+        target.setContainerFormat(source.getContainerFormat());
+        target.setVideoCodec(source.getVideoCodec());
+        target.setAudioCodec(source.getAudioCodec());
+        target.setMetadataFetched(source.getMetadataFetched());
     }
 }
 

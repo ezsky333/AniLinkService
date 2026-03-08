@@ -10,6 +10,11 @@ const pollingInterval = ref(null)
 const lastUpdate = ref(null)
 const isPolling = ref(true)
 
+const getMatchProcessedCount = () => {
+  if (!matchProgress.value) return 0
+  return Number(matchProgress.value.matched || 0) + Number(matchProgress.value.noMatch || 0)
+}
+
 // 获取全局元数据进度
 const fetchMetadataProgress = async () => {
   try {
@@ -177,11 +182,11 @@ onUnmounted(() => {
               <div class="d-flex justify-space-between align-center mb-2">
                 <span class="text-body-2">匹配进度</span>
                 <span class="text-caption font-weight-medium">
-                  {{ matchProgress.matched || 0 }} / {{ matchProgress.totalFiles || 0 }}
+                  {{ getMatchProcessedCount() }} / {{ matchProgress.totalFiles || 0 }}
                 </span>
               </div>
               <v-progress-linear
-                :model-value="matchProgress.totalFiles ? Math.round((matchProgress.matched / matchProgress.totalFiles) * 100) : 0"
+                :model-value="matchProgress.totalFiles ? Math.round((getMatchProcessedCount() / matchProgress.totalFiles) * 100) : 0"
                 height="8"
                 color="success"
               />
@@ -191,16 +196,16 @@ onUnmounted(() => {
             <div class="pt-2">
               <div class="grid gap-2" style="display: grid; grid-template-columns: repeat(2, 1fr);">
                 <div class="pa-2 rounded" style="background-color: rgba(33, 150, 243, 0.1);">
-                  <div class="text-caption text-grey">待处理</div>
-                  <div class="text-h6 font-weight-bold text-info">{{ matchProgress.pendingMatch || 0 }}</div>
+                  <div class="text-caption text-grey">队列待处理</div>
+                  <div class="text-h6 font-weight-bold text-info">{{ matchProgress.queuePending || 0 }}</div>
                 </div>
                 <div class="pa-2 rounded" style="background-color: rgba(76, 175, 80, 0.1);">
                   <div class="text-caption text-grey">已匹配</div>
-                  <div class="text-h6 font-weight-bold text-success">{{ matchProgress.totalMatched || 0 }}</div>
+                  <div class="text-h6 font-weight-bold text-success">{{ matchProgress.matched || 0 }}</div>
                 </div>
                 <div class="pa-2 rounded" style="background-color: rgba(255, 193, 7, 0.1);">
                   <div class="text-caption text-grey">无匹配</div>
-                  <div class="text-h6 font-weight-bold text-warning">{{ matchProgress.totalNoMatch || 0 }}</div>
+                  <div class="text-h6 font-weight-bold text-warning">{{ matchProgress.noMatch || 0 }}</div>
                 </div>
                 <div class="pa-2 rounded" style="background-color: rgba(244, 67, 54, 0.1);">
                   <div class="text-caption text-grey">失败任务</div>
@@ -211,7 +216,8 @@ onUnmounted(() => {
 
             <!-- 详细信息 -->
             <div class="pt-2 text-caption text-grey space-y-1" style="border-top: 1px solid #eee;">
-              <div>总入队: {{ matchProgress.totalEnqueued || 0 }}</div>
+              <div>总待匹配: {{ matchProgress.pendingMatch || 0 }}</div>
+              <div>累计入队: {{ matchProgress.totalEnqueued || 0 }} · 累计处理: {{ matchProgress.totalProcessed || 0 }} · 累计匹配: {{ matchProgress.totalMatched || 0 }} · 累计无匹配: {{ matchProgress.totalNoMatch || 0 }}</div>
               <div>活跃批次: {{ matchProgress.activeBatches || 0 }} | 批次大小: {{ matchProgress.batchSize || 20 }} | 间隔: {{ matchProgress.queueIntervalSeconds || 30 }}s</div>
             </div>
           </div>
@@ -232,7 +238,7 @@ onUnmounted(() => {
             元数据: 总文件 {{ metadataProgress.totalFiles || 0 }} | 已扫描 {{ metadataProgress.metadataFetched || 0 }} | 进度 {{ metadataProgress.totalFiles ? Math.round((metadataProgress.metadataFetched / metadataProgress.totalFiles) * 100) : 0 }}%
           </div>
           <div v-if="matchProgress">
-            弹幕: 总文件 {{ matchProgress.totalFiles || 0 }} | 已匹配 {{ matchProgress.matched || 0 }} | 进度 {{ matchProgress.totalFiles ? Math.round((matchProgress.matched / matchProgress.totalFiles) * 100) : 0 }}%
+            弹幕: 总文件 {{ matchProgress.totalFiles || 0 }} | 已处理 {{ getMatchProcessedCount() }} | 进度 {{ matchProgress.totalFiles ? Math.round((getMatchProcessedCount() / matchProgress.totalFiles) * 100) : 0 }}%
           </div>
         </div>
       </v-card-text>

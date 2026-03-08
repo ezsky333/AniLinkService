@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import xyz.ezsky.anilink.model.dto.MediaSubtitleDTO;
 import xyz.ezsky.anilink.model.entity.MediaFile;
@@ -87,7 +88,10 @@ public class MediaSubtitleService {
             }
 
             try {
-                MediaSubtitle subtitle = new MediaSubtitle();
+                MediaSubtitle subtitle = mediaSubtitleRepository
+                        .findByMediaFileIdAndStreamIndex(mediaFile.getId(), streamInfo.streamIndex())
+                        .orElseGet(MediaSubtitle::new);
+
                 subtitle.setMediaFile(mediaFile);
                 subtitle.setStreamIndex(streamInfo.streamIndex());
                 subtitle.setTrackName(streamInfo.trackName());
@@ -98,6 +102,23 @@ public class MediaSubtitleService {
                 subtitle.setFilePath(outputPath.toAbsolutePath().toString());
                 subtitle.setFileSize(Files.size(outputPath));
                 mediaSubtitleRepository.save(subtitle);
+            } catch (DataIntegrityViolationException e) {
+                // 并发场景下可能已有同 streamIndex 记录被其他线程写入，回退为更新确保幂等。
+                mediaSubtitleRepository.findByMediaFileIdAndStreamIndex(mediaFile.getId(), streamInfo.streamIndex())
+                        .ifPresent(existing -> {
+                            existing.setTrackName(streamInfo.trackName());
+                            existing.setLanguage(streamInfo.language());
+                            existing.setCodecName(streamInfo.codecName());
+                            existing.setSubtitleFormat(fileExt);
+                            existing.setFileName(fileName);
+                            existing.setFilePath(outputPath.toAbsolutePath().toString());
+                            try {
+                                existing.setFileSize(Files.size(outputPath));
+                            } catch (IOException ioException) {
+                                log.warn("Failed to read subtitle file size for {}", outputPath, ioException);
+                            }
+                            mediaSubtitleRepository.save(existing);
+                        });
             } catch (Exception e) {
                 log.error("Failed to persist subtitle metadata for stream {} in file {}",
                         streamInfo.streamIndex(), sourcePath, e);

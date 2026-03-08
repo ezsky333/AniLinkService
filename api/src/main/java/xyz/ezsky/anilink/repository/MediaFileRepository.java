@@ -19,6 +19,8 @@ public interface MediaFileRepository extends BaseRepository<MediaFile, Long> {
 
     long countByMetadataFetchedTrue();
 
+    long countByMetadataFetchedFalse();
+
     long countByLibraryIdAndMetadataFetchedTrue(Long libraryId);
 
     long countByMatchStatus(MatchStatus matchStatus);
@@ -27,8 +29,20 @@ public interface MediaFileRepository extends BaseRepository<MediaFile, Long> {
 
     long countByLibraryIdAndMatchStatus(Long libraryId, MatchStatus matchStatus);
 
+    long countByMatchStatusIn(List<MatchStatus> matchStatuses);
+
+    long countByLibraryIdAndMatchStatusIn(Long libraryId, List<MatchStatus> matchStatuses);
+
     // 新的分页查询，按数据库ID排序由调用方的 Pageable 决定
     Page<MediaFile> findByAnimeId(Long animeId, Pageable pageable);
+
+    Page<MediaFile> findByMetadataFetchedFalse(Pageable pageable);
+
+    Page<MediaFile> findByLibraryIdAndMetadataFetchedFalse(Long libraryId, Pageable pageable);
+
+    Page<MediaFile> findByMatchStatusIn(List<MatchStatus> matchStatuses, Pageable pageable);
+
+    Page<MediaFile> findByLibraryIdAndMatchStatusIn(Long libraryId, List<MatchStatus> matchStatuses, Pageable pageable);
 
     /**
      * 查询库中指定匹配状态的文件

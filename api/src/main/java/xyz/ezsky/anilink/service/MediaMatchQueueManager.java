@@ -2,6 +2,9 @@ package xyz.ezsky.anilink.service;
 
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -13,16 +16,16 @@ import xyz.ezsky.anilink.repository.MediaFileRepository;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 媒体匹配队列管理器
@@ -30,11 +33,13 @@ import java.util.concurrent.TimeUnit;
  * 负责：
  * 1. 接收单个新增文件的匹配请求
  * 2. 将文件ID添加到队列
- * 3. 每30秒取出最多20个文件进行批量匹配
+ * 3. 按固定间隔批量匹配，并在队列积压时尽快触发处理
  */
 @Log4j2
 @Service
 public class MediaMatchQueueManager {
+
+    private static final List<MatchStatus> AUTO_PENDING_STATUSES = Arrays.asList(MatchStatus.UNMATCHED);
 
     @Autowired
     private MediaFileRepository mediaFileRepository;
@@ -45,11 +50,16 @@ public class MediaMatchQueueManager {
     @Autowired
     private MediaHashService mediaHashService;
 
-    private final Set<Long> matchQueue = new HashSet<>();
     private final ScheduledExecutorService scheduledExecutor = Executors.newScheduledThreadPool(1);
     private ScheduledFuture<?> scheduledTask;
-    private static final int BATCH_SIZE = 20;
-    private static final int QUEUE_INTERVAL_SECONDS = 30;
+    private final AtomicBoolean immediateDrainScheduled = new AtomicBoolean(false);
+
+    @Value("${anilink.match-queue.batch-size:20}")
+    private int batchSize;
+
+    @Value("${anilink.match-queue.interval-seconds:10}")
+    private int queueIntervalSeconds;
+
     private final AtomicInteger activeBatches = new AtomicInteger(0);
     private final AtomicLong totalEnqueued = new AtomicLong(0);
     private final AtomicLong totalProcessed = new AtomicLong(0);
@@ -81,12 +91,9 @@ public class MediaMatchQueueManager {
      * @param mediaFileId 待匹配文件的 ID
      */
     public void addToQueue(Long mediaFileId) {
-        synchronized (matchQueue) {
-            if (matchQueue.add(mediaFileId)) {
-                totalEnqueued.incrementAndGet();
-            }
-            log.debug("Added file {} to match queue, current size: {}", mediaFileId, matchQueue.size());
-        }
+        totalEnqueued.incrementAndGet();
+        log.debug("Match trigger accepted for file: {}", mediaFileId);
+        scheduleImmediateDrain();
     }
 
     /**
@@ -103,11 +110,16 @@ public class MediaMatchQueueManager {
 
         int enqueued = 0;
         for (MediaFile mediaFile : candidates) {
-            if (Boolean.TRUE.equals(mediaFile.getMetadataFetched())) {
-                addToQueue(mediaFile.getId());
-                enqueued++;
-            }
+            mediaFile.setMatchStatus(MatchStatus.UNMATCHED);
+            mediaFileRepository.save(mediaFile);
+            enqueued++;
         }
+
+        if (enqueued > 0) {
+            totalEnqueued.addAndGet(enqueued);
+            scheduleImmediateDrain();
+        }
+
         return enqueued;
     }
 
@@ -121,11 +133,11 @@ public class MediaMatchQueueManager {
 
         scheduledTask = scheduledExecutor.scheduleAtFixedRate(
             this::processQueue,
-            QUEUE_INTERVAL_SECONDS,
-            QUEUE_INTERVAL_SECONDS,
+            queueIntervalSeconds,
+            queueIntervalSeconds,
             TimeUnit.SECONDS
         );
-        log.info("Queue processor started with interval: {}s", QUEUE_INTERVAL_SECONDS);
+        log.info("Queue processor started with interval: {}s", queueIntervalSeconds);
     }
 
     /**
@@ -142,49 +154,18 @@ public class MediaMatchQueueManager {
      * 处理队列中的文件
      */
     private void processQueue() {
-        List<Long> filesToProcess = new ArrayList<>();
+        List<MediaFile> mediaFiles = mediaFileRepository
+                .findByMatchStatusIn(AUTO_PENDING_STATUSES, PageRequest.of(0, batchSize, Sort.by(Sort.Direction.ASC, "id")))
+                .getContent();
 
-        synchronized (matchQueue) {
-            if (matchQueue.isEmpty()) {
-                return;
-            }
-
-            // 获取最多50个文件ID
-            int count = 0;
-            for (Long fileId : matchQueue) {
-                if (count >= BATCH_SIZE) {
-                    break;
-                }
-                filesToProcess.add(fileId);
-                count++;
-            }
-
-            // 从队列中移除已取出的文件
-            filesToProcess.forEach(matchQueue::remove);
-        }
-
-        if (filesToProcess.isEmpty()) {
+        if (mediaFiles.isEmpty()) {
             return;
         }
 
-        log.info("Processing {} files from match queue", filesToProcess.size());
+        log.info("Processing {} files from match queue", mediaFiles.size());
         activeBatches.incrementAndGet();
 
         try {
-            // 获取这些文件的完整信息
-            List<MediaFile> mediaFiles = new ArrayList<>();
-            for (Long fileId : filesToProcess) {
-                var mediaFile = mediaFileRepository.findById(fileId);
-                if (mediaFile.isPresent()) {
-                    mediaFiles.add(mediaFile.get());
-                }
-            }
-
-            if (mediaFiles.isEmpty()) {
-                log.warn("No media files found for queue processing");
-                return;
-            }
-
             // 处理批次
             processBatch(mediaFiles);
 
@@ -193,7 +174,34 @@ public class MediaMatchQueueManager {
             totalFailed.incrementAndGet();
         } finally {
             activeBatches.decrementAndGet();
+
+            boolean hasMore = mediaFileRepository.countByMatchStatusIn(AUTO_PENDING_STATUSES) > 0;
+
+            // 当前批次完成后，如果还有积压，继续快速排空，避免必须等待下一个固定周期。
+            if (hasMore) {
+                scheduleImmediateDrain();
+            }
         }
+    }
+
+    private void scheduleImmediateDrain() {
+        if (!immediateDrainScheduled.compareAndSet(false, true)) {
+            return;
+        }
+
+        scheduledExecutor.execute(() -> {
+            try {
+                processQueue();
+            } finally {
+                immediateDrainScheduled.set(false);
+
+                boolean hasMore = mediaFileRepository.countByMatchStatusIn(AUTO_PENDING_STATUSES) > 0;
+
+                if (hasMore) {
+                    scheduleImmediateDrain();
+                }
+            }
+        });
     }
 
     /**
@@ -204,11 +212,12 @@ public class MediaMatchQueueManager {
         List<MediaFile> requestFiles = new ArrayList<>();
 
         for (MediaFile mediaFile : batch) {
+            Long mediaFileId = mediaFile.getId();
+
             // 检查文件是否存在
             if (!Files.exists(Paths.get(mediaFile.getFilePath()))) {
                 log.warn("File no longer exists: {}", mediaFile.getFilePath());
-                mediaFile.setMatchStatus(MatchStatus.NO_MATCH_FOUND);
-                mediaFileRepository.save(mediaFile);
+                markNoMatchPreservingMetadata(mediaFileId);
                 totalProcessed.incrementAndGet();
                 totalNoMatch.incrementAndGet();
                 continue;
@@ -216,11 +225,19 @@ public class MediaMatchQueueManager {
 
             // 确保hash已计算
             if (mediaFile.getHash() == null || mediaFile.getHash().isEmpty()) {
+                mediaFileRepository.findById(mediaFileId).ifPresent(latest -> {
+                    if (latest.getHash() != null && !latest.getHash().isEmpty()) {
+                        mediaFile.setHash(latest.getHash());
+                    }
+                });
+            }
+
+            if (mediaFile.getHash() == null || mediaFile.getHash().isEmpty()) {
                 try {
                     String hash = mediaHashService.calculateHash(Paths.get(mediaFile.getFilePath()));
                     if (hash != null) {
                         mediaFile.setHash(hash);
-                        mediaFileRepository.save(mediaFile);
+                        saveHashOnly(mediaFileId, hash);
                         log.debug("Calculated hash for file: {}", mediaFile.getFilePath());
                     }
                 } catch (Exception e) {
@@ -253,22 +270,14 @@ public class MediaMatchQueueManager {
 
             try {
                 if (result.getSuccess() != null && result.getSuccess()) {
-                    // 匹配成功
-                    mediaFile.setMatchStatus(MatchStatus.MATCHED);
-                    mediaFile.setEpisodeId(result.getEpisodeId());
-                    mediaFile.setAnimeId(result.getAnimeId());
-                    mediaFile.setAnimeTitle(result.getAnimeTitle());
-                    mediaFile.setEpisodeTitle(result.getEpisodeTitle());
+                    saveMatchedResultPreservingMetadata(mediaFile.getId(), result);
                     log.info("Matched file {} -> episodeId: {}", mediaFile.getFilePath(), result.getEpisodeId());
                     totalMatched.incrementAndGet();
                 } else {
-                    // 匹配失败
-                    mediaFile.setMatchStatus(MatchStatus.NO_MATCH_FOUND);
+                    markNoMatchPreservingMetadata(mediaFile.getId());
                     log.debug("No match found for file: {}", mediaFile.getFilePath());
                     totalNoMatch.incrementAndGet();
                 }
-
-                mediaFileRepository.save(mediaFile);
                 totalProcessed.incrementAndGet();
 
             } catch (Exception e) {
@@ -288,9 +297,7 @@ public class MediaMatchQueueManager {
      * 获取队列中当前的文件数量（用于监控）
      */
     public int getQueueSize() {
-        synchronized (matchQueue) {
-            return matchQueue.size();
-        }
+        return (int) mediaFileRepository.countByMatchStatusIn(AUTO_PENDING_STATUSES);
     }
 
     public int getActiveBatches() {
@@ -298,11 +305,11 @@ public class MediaMatchQueueManager {
     }
 
     public int getBatchSize() {
-        return BATCH_SIZE;
+        return batchSize;
     }
 
     public int getQueueIntervalSeconds() {
-        return QUEUE_INTERVAL_SECONDS;
+        return queueIntervalSeconds;
     }
 
     public long getTotalEnqueued() {
@@ -323,5 +330,42 @@ public class MediaMatchQueueManager {
 
     public long getTotalFailed() {
         return totalFailed.get();
+    }
+
+    private void saveHashOnly(Long mediaFileId, String hash) {
+        if (mediaFileId == null || hash == null || hash.isEmpty()) {
+            return;
+        }
+
+        mediaFileRepository.findById(mediaFileId).ifPresent(latest -> {
+            latest.setHash(hash);
+            mediaFileRepository.save(latest);
+        });
+    }
+
+    private void markNoMatchPreservingMetadata(Long mediaFileId) {
+        if (mediaFileId == null) {
+            return;
+        }
+
+        mediaFileRepository.findById(mediaFileId).ifPresent(latest -> {
+            latest.setMatchStatus(MatchStatus.NO_MATCH_FOUND);
+            mediaFileRepository.save(latest);
+        });
+    }
+
+    private void saveMatchedResultPreservingMetadata(Long mediaFileId, MatchResult result) {
+        if (mediaFileId == null || result == null) {
+            return;
+        }
+
+        mediaFileRepository.findById(mediaFileId).ifPresent(latest -> {
+            latest.setMatchStatus(MatchStatus.MATCHED);
+            latest.setEpisodeId(result.getEpisodeId());
+            latest.setAnimeId(result.getAnimeId());
+            latest.setAnimeTitle(result.getAnimeTitle());
+            latest.setEpisodeTitle(result.getEpisodeTitle());
+            mediaFileRepository.save(latest);
+        });
     }
 }

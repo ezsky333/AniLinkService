@@ -5,7 +5,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import xyz.ezsky.anilink.model.dto.MediaMetadata;
 import xyz.ezsky.anilink.model.entity.MediaFile;
-import xyz.ezsky.anilink.repository.MediaFileRepository;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -15,9 +14,8 @@ import java.nio.file.Paths;
  * 
  * 负责：
  * 1. 调用 FFprobe 提取视频技术信息（分辨率、编码等）
- * 2. 计算文件 MD5 哈希值
- * 3. 合并所有信息到 MediaFile 实体
- * 4. 提供钩子方法供外部调用接口获取动漫信息
+ * 2. 合并技术信息到 MediaFile 实体
+ * 3. 抽取并落地内封字幕
  * 
  * 使用异步队列支持大规模并发处理，避免阻塞主扫描线程。
  */
@@ -27,15 +25,6 @@ public class MediaMetadataEnricher {
 
     @Autowired
     private MediaProbeService mediaProbeService;
-
-    @Autowired
-    private MediaHashService mediaHashService;
-
-    @Autowired
-    private MediaFileRepository mediaFileRepository;
-
-    @Autowired
-    private MediaMatchQueueManager matchQueueManager;
 
     @Autowired
     private MediaSubtitleService mediaSubtitleService;
@@ -49,24 +38,8 @@ public class MediaMetadataEnricher {
      * @param queueManager 异步队列管理器
      */
     public void enrichMediaFileAsync(MediaFile mediaFile, MediaMetadataQueueManager queueManager) {
-        Path filePath = Paths.get(mediaFile.getFilePath());
-
-        // 提交到异步队列
-        queueManager.submitMetadataExtraction(mediaFile, filePath, updatedFile -> {
-            enrichMediaFileSync(updatedFile);
-            // 在数据库中保存更新
-            mediaFileRepository.save(updatedFile);
-            log.info("Successfully enriched metadata for file: {}", updatedFile.getFilePath());
-
-            // 元数据提取完成后，将文件添加到匹配队列
-            // 只有当hash已经生成时才添加到匹配队列
-            if (updatedFile.getHash() != null && !updatedFile.getHash().isEmpty()) {
-                matchQueueManager.addToQueue(updatedFile.getId());
-                log.debug("Added file {} to match queue after metadata enrichment", updatedFile.getId());
-            } else {
-                log.warn("Hash not generated for file {}, skipping match queue", updatedFile.getFilePath());
-            }
-        });
+        // 兼容旧调用：当前改为 DB 驱动调度，不直接向内存队列提交任务。
+        queueManager.triggerProcessing();
     }
 
     /**
@@ -91,18 +64,10 @@ public class MediaMetadataEnricher {
                 log.warn("Failed to extract metadata using FFprobe for file: {}", filePath);
             }
 
-            // 第二步：计算文件哈希值
-            String hash = mediaHashService.calculateHash(filePath);
-            if (hash != null) {
-                mediaFile.setHash(hash);
-            } else {
-                log.warn("Failed to calculate hash for file: {}", filePath);
-            }
-
-            // 第三步：针对 MKV 文件抽取内封字幕（图片字幕按原格式导出）
+            // 第二步：针对 MKV 文件抽取内封字幕（图片字幕按原格式导出）
             mediaSubtitleService.extractSubtitlesIfMkv(mediaFile);
 
-            // 第四步：标记已获取元数据
+            // 第三步：标记已获取元数据
             mediaFile.setMetadataFetched(true);
 
             long duration = System.currentTimeMillis() - startTime;

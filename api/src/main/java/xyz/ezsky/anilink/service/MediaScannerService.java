@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import xyz.ezsky.anilink.model.entity.MediaFile;
 import xyz.ezsky.anilink.model.entity.MediaLibrary;
+import xyz.ezsky.anilink.model.entity.MatchStatus;
 import xyz.ezsky.anilink.repository.MediaFileRepository;
 import xyz.ezsky.anilink.repository.MediaLibraryRepository;
 
@@ -45,13 +46,13 @@ public class MediaScannerService {
     private MediaFileRepository mediaFileRepository;
 
     @Autowired
-    private MediaMetadataEnricher mediaMetadataEnricher;
-
-    @Autowired
     private MediaMetadataQueueManager metadataQueueManager;
 
     @Autowired
     private MediaSubtitleService mediaSubtitleService;
+
+    @Autowired
+    private MediaMatchQueueManager mediaMatchQueueManager;
 
     private final ExecutorService executorService = Executors.newFixedThreadPool(4);
     private final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
@@ -163,11 +164,21 @@ public class MediaScannerService {
                 existingFile.setSize(attrs.size());
                 // 重置元数据提取标志，以便重新提取
                 existingFile.setMetadataFetched(false);
+                // 文件内容变化后，清空旧 hash/匹配结果，避免后续匹配误用历史数据。
+                existingFile.setHash(null);
+                existingFile.setMatchStatus(MatchStatus.UNMATCHED);
+                existingFile.setEpisodeId(null);
+                existingFile.setAnimeId(null);
+                existingFile.setAnimeTitle(null);
+                existingFile.setEpisodeTitle(null);
                 mediaFileRepository.save(existingFile);
                 log.info("Updated file: {}", filePath);
+
+                // 文件记录更新后立即入匹配队列，避免等待 FFprobe 链路。
+                mediaMatchQueueManager.addToQueue(existingFile.getId());
                 
-                // 提交异步元数据提取任务
-                mediaMetadataEnricher.enrichMediaFileAsync(existingFile, metadataQueueManager);
+                // 仅触发后台处理器；具体任务由处理器按库内待处理文件分批拉取。
+                metadataQueueManager.triggerProcessing();
             }
         } else {
             MediaFile newMediaFile = new MediaFile();
@@ -179,10 +190,12 @@ public class MediaScannerService {
             newMediaFile.setMetadataFetched(false);  // 标记待提取元数据
             MediaFile savedFile = mediaFileRepository.save(newMediaFile);
             log.info("Added new file: {}", filePath);
+
+            // 新文件落库后立即入匹配队列，匹配所需字段由匹配队列自行补齐（hash）。
+            mediaMatchQueueManager.addToQueue(savedFile.getId());
             
-            // 提交异步元数据提取任务
-            // 注意：匹配队列将在元数据提取完成后自动添加
-            mediaMetadataEnricher.enrichMediaFileAsync(savedFile, metadataQueueManager);
+            // 仅触发后台处理器；具体任务由处理器按库内待处理文件分批拉取。
+            metadataQueueManager.triggerProcessing();
         }
     }
 

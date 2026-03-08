@@ -19,6 +19,12 @@ const progressData = ref({})
 const showProgress = ref({})
 const pollIntervals = ref({})
 
+const getLibraryMatchProcessedCount = (libraryId) => {
+  const match = progressData.value[libraryId]?.match
+  if (!match) return 0
+  return Number(match.matched || 0) + Number(match.noMatch || 0)
+}
+
 // 获取进度数据（确保响应式）
 const getProgressData = (libraryId) => {
   return progressData.value[libraryId]
@@ -443,18 +449,18 @@ onUnmounted(() => {
                       弹幕匹配进度
                     </span>
                     <span class="text-caption text-grey">
-                      {{ progressData[library.id].match.matched || 0 }} / {{ progressData[library.id].match.totalFiles || 0 }}
+                      {{ getLibraryMatchProcessedCount(library.id) }} / {{ progressData[library.id].match.totalFiles || 0 }}
                     </span>
                   </div>
                   <v-progress-linear
-                    :model-value="progressData[library.id].match.totalFiles > 0 ? Math.round((progressData[library.id].match.matched / progressData[library.id].match.totalFiles) * 100) : 0"
+                    :model-value="progressData[library.id].match.totalFiles > 0 ? Math.round((getLibraryMatchProcessedCount(library.id) / progressData[library.id].match.totalFiles) * 100) : 0"
                     height="6"
                     color="success"
                     class="mb-2"
                   />
                   <div class="text-caption text-grey">
-                    <div>队列待处理: {{ progressData[library.id].match.pendingMatch || 0 }} · 活跃批次: {{ progressData[library.id].match.activeBatches || 0 }}</div>
-                    <div v-if="progressData[library.id].match.totalEnqueued > 0">入队: {{ progressData[library.id].match.totalEnqueued }} · 已匹配: {{ progressData[library.id].match.totalMatched }} · 无匹配: {{ progressData[library.id].match.totalNoMatch || 0 }} · 失败: {{ progressData[library.id].match.failedTasks || 0 }}</div>
+                    <div>队列待处理: {{ progressData[library.id].match.queuePending || 0 }} · 总待匹配: {{ progressData[library.id].match.pendingMatch || 0 }} · 活跃批次: {{ progressData[library.id].match.activeBatches || 0 }}</div>
+                    <div v-if="progressData[library.id].match.totalEnqueued > 0">当前已处理: {{ getLibraryMatchProcessedCount(library.id) }} · 当前已匹配: {{ progressData[library.id].match.matched || 0 }} · 当前无匹配: {{ progressData[library.id].match.noMatch || 0 }} · 累计入队: {{ progressData[library.id].match.totalEnqueued }} · 累计匹配: {{ progressData[library.id].match.totalMatched }} · 累计无匹配: {{ progressData[library.id].match.totalNoMatch || 0 }} · 失败: {{ progressData[library.id].match.failedTasks || 0 }}</div>
                   </div>
                 </div>
                 <div v-else class="text-center text-grey">
