@@ -23,6 +23,7 @@ import java.util.Arrays;
 import java.io.File;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
@@ -37,6 +38,9 @@ public class MediaFileService {
 
     @Autowired
     private MediaFileRepository mediaFileRepository;
+    
+    @Autowired
+    private xyz.ezsky.anilink.service.notification.EpisodeUpdateNotificationService episodeUpdateNotificationService;
 
     @Autowired
     private MediaLibraryRepository mediaLibraryRepository;
@@ -121,8 +125,18 @@ public class MediaFileService {
             }
         }
 
-        mediaFileRepository.save(mediaFile);
-        return toDTO(mediaFile);
+        MediaFile saved = mediaFileRepository.save(mediaFile);
+        
+        // 如果手动匹配成功，也异步通知追番用户
+        if (saved.getMatchStatus() == MatchStatus.MATCHED && saved.getAnimeId() != null) {
+            try {
+                episodeUpdateNotificationService.notifyFollowingUsersAsync(saved);
+            } catch (Exception e) {
+                log.warn("Failed to trigger notification for rematch: {}", e.getMessage());
+            }
+        }
+        
+        return toDTO(saved);
     }
 
     /**
@@ -290,6 +304,9 @@ public class MediaFileService {
     public void updateMediaFile(Long fileId, UpdateMediaFileRequest request) {
         mediaFileRepository.findById(fileId).ifPresentOrElse(
                 mediaFile -> {
+                    Long originalAnimeId = mediaFile.getAnimeId();
+                    String originalEpisodeId = mediaFile.getEpisodeId();
+
                     if (request.getEpisodeId() != null) {
                         mediaFile.setEpisodeId(request.getEpisodeId());
                     }
@@ -302,11 +319,42 @@ public class MediaFileService {
                     if (request.getEpisodeTitle() != null) {
                         mediaFile.setEpisodeTitle(request.getEpisodeTitle());
                     }
-                    mediaFileRepository.save(mediaFile);
+
+                    // 手工更新后同步匹配状态，确保“弹幕匹配”展示与绑定关系一致。
+                    boolean hasMatchedBinding = mediaFile.getAnimeId() != null
+                            && mediaFile.getEpisodeId() != null
+                            && !mediaFile.getEpisodeId().isBlank();
+                    mediaFile.setMatchStatus(hasMatchedBinding ? MatchStatus.MATCHED : MatchStatus.UNMATCHED);
+
+                    MediaFile saved = mediaFileRepository.save(mediaFile);
+
+                    // 手工更新将文件绑定到新剧集时，也触发一次追番通知。
+                    if (shouldNotifyAfterManualUpdate(saved, originalAnimeId, originalEpisodeId)) {
+                        try {
+                            episodeUpdateNotificationService.notifyFollowingUsersAsync(saved);
+                        } catch (Exception e) {
+                            log.warn("Failed to trigger notification for manual update fileId={}: {}", fileId, e.getMessage());
+                        }
+                    }
+
                     log.info("Updated media file: {}", fileId);
                 },
                 () -> log.warn("Media file not found with id: {}", fileId)
         );
+    }
+
+    private boolean shouldNotifyAfterManualUpdate(MediaFile saved, Long originalAnimeId, String originalEpisodeId) {
+        if (saved == null || saved.getAnimeId() == null) {
+            return false;
+        }
+
+        String currentEpisodeId = saved.getEpisodeId();
+        if (currentEpisodeId == null || currentEpisodeId.isBlank()) {
+            return false;
+        }
+
+        return !Objects.equals(saved.getAnimeId(), originalAnimeId)
+                || !Objects.equals(currentEpisodeId, originalEpisodeId);
     }
 
     private List<MatchStatus> resolveMatchStatuses(Boolean matched) {

@@ -37,6 +37,9 @@ public class MediaMatchBatchService {
 
     @Autowired
     private MediaHashService mediaHashService;
+    
+    @Autowired
+    private xyz.ezsky.anilink.service.notification.EpisodeUpdateNotificationService episodeUpdateNotificationService;
 
     private final ExecutorService executorService = Executors.newFixedThreadPool(2);
     private static final int BATCH_SIZE = 20;
@@ -158,13 +161,22 @@ public class MediaMatchBatchService {
                     mediaFile.setAnimeTitle(result.getAnimeTitle());
                     mediaFile.setEpisodeTitle(result.getEpisodeTitle());
                     log.debug("Matched file {} -> episodeId: {}", mediaFile.getFilePath(), result.getEpisodeId());
+                    
+                    // 保存到数据库
+                    MediaFile saved = mediaFileRepository.save(mediaFile);
+                    
+                    // 异步通知追番用户
+                    try {
+                        episodeUpdateNotificationService.notifyFollowingUsersAsync(saved);
+                    } catch (Exception e) {
+                        log.warn("Failed to trigger notification for batch match: {}", e.getMessage());
+                    }
                 } else {
                     // 匹配失败
                     mediaFile.setMatchStatus(MatchStatus.NO_MATCH_FOUND);
                     log.debug("No match found for file: {}", mediaFile.getFilePath());
+                    mediaFileRepository.save(mediaFile);
                 }
-
-                mediaFileRepository.save(mediaFile);
 
             } catch (Exception e) {
                 log.error("Error updating match result for file: {}", mediaFile.getFilePath(), e);

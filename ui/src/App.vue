@@ -15,7 +15,7 @@
     <v-snackbar
       v-model="appMessage.open"
       :color="appMessage.color"
-      location="top"
+      location="bottom"
       timeout="2800"
     >
       {{ appMessage.text }}

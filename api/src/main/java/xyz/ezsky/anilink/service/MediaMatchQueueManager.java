@@ -49,6 +49,9 @@ public class MediaMatchQueueManager {
 
     @Autowired
     private MediaHashService mediaHashService;
+    
+    @Autowired
+    private xyz.ezsky.anilink.service.notification.EpisodeUpdateNotificationService episodeUpdateNotificationService;
 
     private final ScheduledExecutorService scheduledExecutor = Executors.newScheduledThreadPool(1);
     private ScheduledFuture<?> scheduledTask;
@@ -366,6 +369,9 @@ public class MediaMatchQueueManager {
             latest.setAnimeTitle(result.getAnimeTitle());
             latest.setEpisodeTitle(result.getEpisodeTitle());
             mediaFileRepository.save(latest);
+            
+            // 异步通知追番用户
+            episodeUpdateNotificationService.notifyFollowingUsersAsync(latest);
         });
     }
 }

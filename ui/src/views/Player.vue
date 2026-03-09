@@ -41,8 +41,11 @@
             :formatted-summary="formattedSummary"
             :is-summary-expanded="isSummaryExpanded"
             :is-favorited="isFavorited"
+            :is-following="isFollowing"
+            :follow-loading="followLoading"
             @update:is-summary-expanded="isSummaryExpanded = $event"
             @toggleFavorite="toggleFavorite"
+            @toggleFollow="toggleFollow"
           />
 
           <!-- 分集列表 -->
@@ -105,9 +108,11 @@
 <script setup>
 import { computed, ref, shallowRef, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import axios from 'axios'
 import Artplayer from 'artplayer'
 import artplayerPluginDanmuku from 'artplayer-plugin-danmuku'
 import SubtitlesOctopus from 'libass-wasm'
+import { showAppMessage } from '../utils/ui-feedback'
 import AnimeHeroSection from '../components/anime/AnimeHeroSection.vue'
 import EpisodeListSection from '../components/anime/EpisodeListSection.vue'
 import TrailerCarousel from '../components/anime/TrailerCarousel.vue'
@@ -129,6 +134,8 @@ const loading = ref(false)
 const error = ref(null)
 const isSummaryExpanded = ref(false)
 const isFavorited = ref(false)
+const isFollowing = ref(false)
+const followLoading = ref(false)
 const showResourceDialog = ref(false)
 const isSwitching = ref(false)
 const selectedResources = ref([])
@@ -138,6 +145,7 @@ const artRef = ref(null)
 const art = shallowRef(null)
 const subtitleOctopus = ref(null)
 const tmpSubtitleOctopusSubUrl = ref('')
+let progressSaveTimer = null
 
 const subtitlesOctopusWorkJsPath = '/js/JavascriptSubtitlesOctopus/subtitles-octopus-worker.js'
 const subtitlesOctopusWorkWasmPath = '/js/JavascriptSubtitlesOctopus/subtitles-octopus-worker.wasm'
@@ -247,8 +255,10 @@ const fetchAnimeData = async () => {
 
     if (animeResp.status === 'fulfilled' && animeResp.value.code === 200 && animeResp.value.data?.bangumi) {
       animeData.value = animeResp.value.data.bangumi
+      await checkFollowStatus()
     } else {
       animeData.value = null
+      isFollowing.value = false
     }
 
     if (episodesResp.status === 'fulfilled' && episodesResp.value.code === 200 && Array.isArray(episodesResp.value.data?.content)) {
@@ -268,6 +278,60 @@ const fetchAnimeData = async () => {
     error.value = err?.message || '获取番剧数据失败'
   } finally {
     loading.value = false
+  }
+}
+
+const checkFollowStatus = async () => {
+  const token = localStorage.getItem('token')
+  if (!token || !animeId.value) {
+    isFollowing.value = false
+    return
+  }
+
+  try {
+    const response = await axios.get(`/api/follows/check/${animeId.value}`)
+    if (response.data?.code === 200) {
+      isFollowing.value = Boolean(response.data.data)
+    } else {
+      isFollowing.value = false
+    }
+  } catch (e) {
+    console.error('检查追番状态失败:', e)
+    isFollowing.value = false
+  }
+}
+
+const toggleFollow = async () => {
+  const token = localStorage.getItem('token')
+  if (!token) {
+    showAppMessage('请先登录', 'warning')
+    return
+  }
+  if (!animeId.value || !animeData.value) {
+    showAppMessage('番剧数据未就绪，请稍后重试', 'warning')
+    return
+  }
+
+  followLoading.value = true
+  try {
+    if (isFollowing.value) {
+      await axios.delete(`/api/follows/${animeId.value}`)
+      isFollowing.value = false
+      showAppMessage('已取消追番', 'success')
+    } else {
+      await axios.post('/api/follows', {
+        animeId: Number(animeId.value),
+        animeTitle: animeData.value?.titles?.[0]?.title || '未知',
+        imageUrl: animeData.value?.imageUrl || '',
+      })
+      isFollowing.value = true
+      showAppMessage('追番成功', 'success')
+    }
+  } catch (e) {
+    console.error('切换追番状态失败:', e)
+    showAppMessage('操作失败，请重试', 'error')
+  } finally {
+    followLoading.value = false
   }
 }
 
@@ -403,6 +467,91 @@ const fetchSubtitles = async (videoId) => {
   } catch (error) {
     console.error('获取字幕失败:', error)
     return []
+  }
+}
+
+/**
+ * 保存播放进度到后端
+ */
+const savePlayProgress = async () => {
+  const token = localStorage.getItem('token')
+  if (!token || !art.value) {
+    return
+  }
+  
+  try {
+    const currentTime = Math.floor(art.value.currentTime || 0)
+    const duration = Math.floor(art.value.duration || 0)
+    
+    if (!videoId.value || !animeId.value || duration === 0) {
+      return
+    }
+    
+    // 如果播放时间小于5秒或进度小于5%，则不保存
+    if (currentTime < 5 || currentTime / duration < 0.05) {
+      return
+    }
+    
+    const isCompleted = currentTime / duration >= 0.9 // 播放超过90%认为已完成
+    
+    await axios.post('/api/play-history/progress', {
+      videoId: videoId.value,
+      videoName: `Episode ${episodeId.value || ''}`,
+      animeId: animeId.value,
+      animeTitle: animeData.value?.titles?.[0]?.title || '未知',
+      progressSeconds: currentTime,
+      durationSeconds: duration,
+      isCompleted: isCompleted
+    })
+    
+    console.log('播放进度已保存:', currentTime, '/', duration)
+  } catch (error) {
+    console.error('保存播放进度失败:', error)
+  }
+}
+
+/**
+ * 加载播放进度
+ */
+const loadPlayProgress = async () => {
+  const token = localStorage.getItem('token')
+  if (!token || !animeId.value) {
+    return null
+  }
+  
+  try {
+    const response = await axios.get(`/api/play-history/anime/${animeId.value}`)
+    if (response.data.code === 200 && response.data.data) {
+      // 仅在当前播放视频与历史视频一致时恢复秒数，避免跨分集误跳进度。
+      if (String(response.data.data.videoId || '') !== String(videoId.value || '')) {
+        return null
+      }
+      return response.data.data.progressSeconds || 0
+    }
+  } catch (error) {
+    console.error('加载播放进度失败:', error)
+  }
+  return null
+}
+
+/**
+ * 开始定时保存播放进度
+ */
+const startProgressSaveTimer = () => {
+  stopProgressSaveTimer()
+  // 每30秒保存一次
+  progressSaveTimer = setInterval(() => {
+    savePlayProgress()
+  }, 30000)
+}
+
+/**
+ * 停止定时保存播放进度
+ */
+const stopProgressSaveTimer = () => {
+  if (progressSaveTimer) {
+    clearInterval(progressSaveTimer)
+    progressSaveTimer = null
   }
 }
 
@@ -966,9 +1115,20 @@ const createPlayerInstance = async () => {
     }
 
     // 监听播放器事件
-    art.value.on('ready', () => {
+    art.value.on('ready', async () => {
       console.log('播放器已就绪')
       placeEpisodeControlBeforeScreenshot()
+
+      // 加载并恢复播放进度
+      try {
+        const savedProgress = await loadPlayProgress()
+        if (savedProgress && savedProgress > 5) {
+          art.value.currentTime = savedProgress
+          console.log('已恢复播放进度:', savedProgress)
+        }
+      } catch (error) {
+        console.warn('恢复播放进度失败:', error)
+      }
 
       // 切集后自动恢复全屏状态
       try {
@@ -984,14 +1144,24 @@ const createPlayerInstance = async () => {
 
     art.value.on('play', () => {
       console.log('开始播放')
+      startProgressSaveTimer()
     })
 
     art.value.on('pause', () => {
       console.log('暂停播放')
+      savePlayProgress()
+      stopProgressSaveTimer()
+    })
+
+    art.value.on('video:ended', () => {
+      console.log('播放结束')
+      savePlayProgress()
+      stopProgressSaveTimer()
     })
 
     art.value.on('error', (error) => {
       console.error('播放器错误:', error)
+      stopProgressSaveTimer()
     })
 
     // 弹幕事件
@@ -1067,6 +1237,8 @@ watch(() => animeId.value, async () => {
 })
 
 onBeforeUnmount(() => {
+  stopProgressSaveTimer()
+  savePlayProgress() // 组件销毁前保存最后一次进度
   destroyPlayerInstance()
 })
 </script>

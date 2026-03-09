@@ -21,8 +21,15 @@
       <div class="anime-status-badge">
         <span class="anime-badge"><i class="mdi mdi-bell"></i> {{ airingStatusText }}</span>
         <span class="anime-badge anime-badge-air">更新 {{ mainEpisodes.length }}/{{ totalEpisodes }}</span>
-        <span class="anime-fav-btn" @click="toggleFavorite" :class="{ favorited: isFavorited }">
-          <i :class="isFavorited ? 'mdi mdi-star' : 'mdi mdi-star-outline'"></i> 收藏
+        <span 
+          v-if="showFollowBtn" 
+          class="anime-follow-btn" 
+          @click="toggleFollow" 
+          :class="{ following: isFollowing, loading: followLoading }"
+          :title="isFollowing ? '取消追番' : '添加追番'"
+        >
+          <i :class="isFollowing ? 'mdi mdi-bookmark-check' : 'mdi mdi-bookmark-outline'"></i> 
+          {{ isFollowing ? '已追番' : '追番' }}
         </span>
       </div>
 
@@ -90,10 +97,22 @@ const props = defineProps({
   isFavorited: {
     type: Boolean,
     required: true
+  },
+  isFollowing: {
+    type: Boolean,
+    default: false
+  },
+  followLoading: {
+    type: Boolean,
+    default: false
   }
 });
 
-const emit = defineEmits(['update:isSummaryExpanded', 'toggleFavorite']);
+const emit = defineEmits(['update:isSummaryExpanded', 'toggleFavorite', 'toggleFollow']);
+
+const showFollowBtn = computed(() => {
+  return !!localStorage.getItem('token');
+});
 
 const airingStatusText = computed(() => {
   if (props.isOnAir) {
@@ -108,6 +127,10 @@ const toggleSummary = () => {
 
 const toggleFavorite = () => {
   emit('toggleFavorite');
+};
+
+const toggleFollow = () => {
+  emit('toggleFollow');
 };
 </script>
 

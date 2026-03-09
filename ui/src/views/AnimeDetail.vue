@@ -23,8 +23,11 @@
           :formatted-summary="formattedSummary"
           :is-summary-expanded="isSummaryExpanded"
           :is-favorited="isFavorited"
+          :is-following="isFollowing"
+          :follow-loading="followLoading"
           @update:is-summary-expanded="isSummaryExpanded = $event"
           @toggleFavorite="toggleFavorite"
+          @toggleFollow="toggleFollow"
         />
 
         <!-- 分集区 -->
@@ -83,6 +86,8 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import axios from 'axios';
+import { showAppMessage } from '../utils/ui-feedback';
 import AnimeHeroSection from '../components/anime/AnimeHeroSection.vue';
 import EpisodeListSection from '../components/anime/EpisodeListSection.vue';
 import TrailerCarousel from '../components/anime/TrailerCarousel.vue';
@@ -105,6 +110,8 @@ const loading = ref(true);
 const error = ref(null);
 const isSummaryExpanded = ref(false);
 const isFavorited = ref(false);
+const isFollowing = ref(false);
+const followLoading = ref(false);
 const route = useRoute();
 const router = useRouter();
 const showResourceDialog = ref(false);
@@ -120,6 +127,8 @@ const fetchAnimeData = async () => {
     const result = await response.json();
     if (result.code === 200 && result.data && result.data.bangumi) {
       animeData.value = result.data.bangumi;
+      // 检查是否已追番
+      checkFollowStatus();
     } else {
       throw new Error('Unexpected response structure');
     }
@@ -141,6 +150,63 @@ const fetchAnimeData = async () => {
     error.value = err.message;
   } finally {
     loading.value = false;
+  }
+};
+
+// 检查是否已追番
+const checkFollowStatus = async () => {
+  const token = localStorage.getItem('token');
+  if (!token || !animeData.value) {
+    isFollowing.value = false;
+    return;
+  }
+  
+  try {
+    const response = await axios.get(`/api/follows/check/${route.params.animeId}`);
+    if (response.data.code === 200) {
+      isFollowing.value = response.data.data || false;
+    }
+  } catch (error) {
+    console.error('Failed to check follow status:', error);
+    isFollowing.value = false;
+  }
+};
+
+// 切换追番状态
+const toggleFollow = async () => {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    showAppMessage('请先登录', 'warning');
+    return;
+  }
+  
+  if (!animeData.value) {
+    showAppMessage('请等待数据加载完成', 'warning');
+    return;
+  }
+  
+  followLoading.value = true;
+  try {
+    if (isFollowing.value) {
+      // 取消追番
+      await axios.delete(`/api/follows/${route.params.animeId}`);
+      isFollowing.value = false;
+      showAppMessage('已取消追番', 'success');
+    } else {
+      // 添加追番
+      await axios.post('/api/follows', {
+        animeId: route.params.animeId,
+        animeTitle: animeData.value.titles?.[0]?.title || '未知',
+        imageUrl: animeData.value.imageUrl || ''
+      });
+      isFollowing.value = true;
+      showAppMessage('追番成功', 'success');
+    }
+  } catch (error) {
+    console.error('Failed to toggle follow:', error);
+    showAppMessage('操作失败，请重试', 'error');
+  } finally {
+    followLoading.value = false;
   }
 };
 

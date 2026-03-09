@@ -15,11 +15,74 @@
         <nav class="nav-menu">
           <router-link to="/" class="nav-item" exact-active-class="active">首页</router-link>
           <router-link to="/search" class="nav-item" active-class="active">发现</router-link>
-          <a href="#" class="nav-item">库</a>
+          <router-link v-if="isLoggedIn" to="/follows" class="nav-item" active-class="active">我的追番</router-link>
         </nav>
 
         <!-- 搜索框和用户菜单 -->
         <div class="nav-right">
+          <!-- 消息按钮和下拉 -->
+          <div v-if="isLoggedIn" class="message-wrapper">
+            <button @click="toggleMessageMenu" class="message-btn" :title="`消息${unreadCount > 0 ? ' (' + unreadCount + ')' : ''}`">
+              <i class="mdi mdi-bell"></i>
+              <span v-if="unreadCount > 0" class="unread-dot"></span>
+            </button>
+            
+            <!-- 消息下拉窗 -->
+            <div v-if="messageMenuOpen" class="message-dropdown" @click.stop>
+              <div class="message-dropdown-header">
+                <span>消息通知</span>
+                <div class="message-header-actions">
+                  <span v-if="unreadCount > 0" class="unread-count-badge">{{ unreadCount }}</span>
+                  <button
+                    v-if="unreadCount > 0"
+                    class="mark-all-read-btn"
+                    :disabled="markingAllRead"
+                    @click="handleMarkAllAsRead"
+                  >
+                    {{ markingAllRead ? '处理中...' : '一键已读' }}
+                  </button>
+                </div>
+              </div>
+              
+              <div class="message-list">
+                <div v-if="loadingMessages" class="message-loading">
+                  <i class="mdi mdi-loading mdi-spin"></i>
+                  <span>加载中...</span>
+                </div>
+                
+                <template v-else-if="recentMessages.length > 0">
+                  <div
+                    v-for="msg in recentMessages"
+                    :key="msg.id"
+                    class="message-item"
+                    :class="{ 'unread': !msg.isRead }"
+                    @click="handleMessageClick(msg)"
+                  >
+                    <div class="message-item-indicator">
+                      <span v-if="!msg.isRead" class="unread-indicator"></span>
+                    </div>
+                    <div class="message-item-content">
+                      <div class="message-item-title">{{ msg.title }}</div>
+                      <div class="message-item-text">{{ msg.content }}</div>
+                      <div class="message-item-time">{{ formatMessageTime(msg.createdAt) }}</div>
+                    </div>
+                  </div>
+                </template>
+                
+                <div v-else class="message-empty">
+                  <i class="mdi mdi-bell-off-outline"></i>
+                  <span>暂无消息</span>
+                </div>
+              </div>
+              
+              <div class="message-dropdown-footer">
+                <button @click="messageMenuOpen = false; goToMessages()" class="view-all-messages-btn">
+                  查看全部消息
+                </button>
+              </div>
+            </div>
+          </div>
+
           <!-- 搜索框 -->
           <div class="search-box">
             <i class="mdi mdi-magnify"></i>
@@ -57,7 +120,11 @@
                 </div>
                 <a href="#" @click.prevent="goToProfile" class="dropdown-item">
                   <i class="mdi mdi-account-circle"></i>
-                  <span>个人中心</span>
+                  <span>观看历史</span>
+                </a>
+                <a href="#" @click.prevent="goToFollows" class="dropdown-item">
+                  <i class="mdi mdi-bookmark-multiple"></i>
+                  <span>我的追番</span>
                 </a>
                 <div class="dropdown-divider"></div>
                 <a v-if="isAdmin" href="#" @click.prevent="goToAdmin" class="dropdown-item">
@@ -210,7 +277,158 @@ const registerForm = ref({
   emailCode: ''
 })
 
+const unreadCount = ref(0)
+
+// 消息下拉
+const messageMenuOpen = ref(false)
+const recentMessages = ref([])
+const loadingMessages = ref(false)
+const markingAllRead = ref(false)
+
 let countdownTimer = null
+
+// 获取未读消息数
+const fetchUnreadCount = async () => {
+  if (!isLoggedIn.value) {
+    unreadCount.value = 0
+    return
+  }
+  
+  try {
+    const res = await axios.get(`${API_BASE}/messages/unread-count`)
+    // 后端 success 统一返回 code=200，兼容历史 code=0 的情况
+    if (res.data?.code === 200 || res.data?.code === 0) {
+      unreadCount.value = Number(res.data.data?.unreadCount || 0)
+      return
+    }
+    unreadCount.value = 0
+  } catch (error) {
+    console.error('获取未读消息数失败:', error)
+    unreadCount.value = 0
+  }
+}
+
+// 获取最近消息
+const fetchRecentMessages = async () => {
+  if (!isLoggedIn.value) {
+    recentMessages.value = []
+    return
+  }
+  
+  loadingMessages.value = true
+  try {
+    const res = await axios.get(`${API_BASE}/messages`, {
+      params: {
+        page: 1,
+        pageSize: 5
+      }
+    })
+    if (res.data?.code === 200) {
+      recentMessages.value = res.data.data.content || []
+    }
+  } catch (error) {
+    console.error('获取最近消息失败:', error)
+  } finally {
+    loadingMessages.value = false
+  }
+}
+
+const handleMarkAllAsRead = async () => {
+  if (markingAllRead.value || unreadCount.value <= 0) {
+    return
+  }
+
+  markingAllRead.value = true
+  try {
+    const res = await axios.put(`${API_BASE}/messages/mark-all-read`)
+    if (res.data?.code === 200 || res.data?.code === 0) {
+      await fetchUnreadCount()
+      await fetchRecentMessages()
+      showAppMessage('已全部标记为已读', 'success')
+      return
+    }
+    showAppMessage(res.data?.msg || '一键已读失败', 'error')
+  } catch (error) {
+    console.error('全部标记已读失败:', error)
+    showAppMessage('一键已读失败，请稍后重试', 'error')
+  } finally {
+    markingAllRead.value = false
+  }
+}
+
+// 格式化时间
+const formatMessageTime = (dateString) => {
+  const date = new Date(dateString)
+  const now = new Date()
+  const diffMs = now - date
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMs / 3600000)
+  const diffDays = Math.floor(diffMs / 86400000)
+  
+  if (diffMins < 1) return '刚刚'
+  if (diffMins < 60) return `${diffMins}分钟前`
+  if (diffHours < 24) return `${diffHours}小时前`
+  if (diffDays < 7) return `${diffDays}天前`
+  return date.toLocaleDateString('zh-CN')
+}
+
+// 处理消息点击
+const handleMessageClick = async (message) => {
+  messageMenuOpen.value = false
+  
+  // 标记为已读
+  if (!message.isRead) {
+    try {
+      await axios.put(`${API_BASE}/messages/${message.id}/read`)
+      await fetchUnreadCount()
+      await fetchRecentMessages()
+    } catch (error) {
+      console.error('标记消息已读失败:', error)
+    }
+  }
+  
+  // 如果是剧集更新消息且有视频ID，跳转到播放页
+  if (message.type === 'episode_update' && message.videoId) {
+    const routeData = router.resolve({
+      name: 'Player',
+      params: { videoId: String(message.videoId) },
+      query: {
+        animeId: String(message.animeId),
+        episodeId: String(message.episodeId || '')
+      }
+    })
+    window.open(routeData.href, '_blank')
+  } else if (message.animeId) {
+    // 否则如果有animeId，跳转到动画详情页
+    router.push(`/anime/${message.animeId}`)
+  }
+}
+
+// 切换消息菜单
+const toggleMessageMenu = () => {
+  messageMenuOpen.value = !messageMenuOpen.value
+  if (messageMenuOpen.value) {
+    fetchRecentMessages()
+  }
+}
+
+// 定期获取未读消息数
+let unreadCountTimer = null
+const startUnreadCountPolling = () => {
+  if (!isLoggedIn.value) return
+  
+  if (!unreadCountTimer) {
+    fetchUnreadCount()
+    unreadCountTimer = setInterval(fetchUnreadCount, 180000) // 每3分钟检查一次
+  }
+}
+
+const stopUnreadCountPolling = () => {
+  if (unreadCountTimer) {
+    clearInterval(unreadCountTimer)
+    unreadCountTimer = null
+  }
+}
 
 // 获取当前用户信息
 const fetchUserInfo = async () => {
@@ -220,6 +438,7 @@ const fetchUserInfo = async () => {
       const userData = res.data.data
       localStorage.setItem('userInfo', JSON.stringify(userData))
       userInfo.value = userData
+      startUnreadCountPolling()
     }
   } catch (error) {
     console.error('获取用户信息失败:', error)
@@ -293,6 +512,22 @@ const syncDocumentTitle = () => {
   document.title = siteConfig.value?.siteName || DEFAULT_SITE_NAME
 }
 
+// 点击外部关闭下拉菜单
+const handleClickOutside = (event) => {
+  if (messageMenuOpen.value) {
+    const messageWrapper = event.target.closest('.message-wrapper')
+    if (!messageWrapper) {
+      messageMenuOpen.value = false
+    }
+  }
+  if (userMenuOpen.value) {
+    const userMenuWrapper = event.target.closest('.user-menu-wrapper')
+    if (!userMenuWrapper) {
+      userMenuOpen.value = false
+    }
+  }
+}
+
 watch(
   () => siteConfig.value?.siteName,
   () => {
@@ -304,6 +539,7 @@ watch(
 onMounted(() => {
   loadSiteConfig()
   checkLoginStatus()
+  document.addEventListener('click', handleClickOutside)
 })
 
 onBeforeUnmount(() => {
@@ -311,6 +547,8 @@ onBeforeUnmount(() => {
     clearInterval(countdownTimer)
     countdownTimer = null
   }
+  stopUnreadCountPolling()
+  document.removeEventListener('click', handleClickOutside)
 })
 
 const loadSiteConfig = () => {
@@ -348,14 +586,8 @@ const handleLogin = async () => {
     if (res.data?.code === 200 && res.data?.data) {
       const { tokenValue } = res.data.data
       localStorage.setItem('token', tokenValue)
-      
-      // 登录成功后获取用户信息
-      await fetchUserInfo()
-
-      showAppMessage('登录成功', 'success')
-      showLoginDialog.value = false
-      userMenuOpen.value = false
-      loginForm.value = { account: '', password: '' }
+      window.location.reload()
+      return
     } else {
       showAppMessage(res.data?.msg || '登录失败', 'error')
     }
@@ -499,15 +731,22 @@ const handleLogout = () => {
   localStorage.removeItem('token')
   localStorage.removeItem('userInfo')
   localStorage.removeItem('rememberMe')
-  userInfo.value = null
-  userMenuOpen.value = false
-  showAppMessage('已登出', 'success')
-  router.push('/')
+  window.location.reload()
 }
 
 const goToProfile = () => {
   userMenuOpen.value = false
   router.push('/profile')
+}
+
+const goToFollows = () => {
+  userMenuOpen.value = false
+  router.push('/follows')
+}
+
+const goToMessages = () => {
+  userMenuOpen.value = false
+  router.push('/messages')
 }
 
 const goToAdmin = () => {
@@ -735,6 +974,243 @@ body {
 .user-btn:hover {
   background: #faf8f5;
   color: var(--primary-dark);
+  border-color: var(--accent-brown);
+}
+
+/* Message Button */
+.message-wrapper {
+  position: relative;
+}
+
+.message-btn {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid #e0d5ca;
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.message-btn:hover {
+  background: #faf8f5;
+  color: var(--primary-dark);
+  border-color: var(--accent-brown);
+}
+
+.unread-dot {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 10px;
+  height: 10px;
+  background: #e74c3c;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 0 0 1px rgba(231, 76, 60, 0.25);
+}
+
+/* Message Dropdown */
+.message-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid var(--border-light);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  width: 360px;
+  max-height: 500px;
+  overflow: hidden;
+  animation: slideDown 0.2s ease;
+  z-index: 1001;
+}
+
+.message-dropdown-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-light);
+  background: var(--bg-cream);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: white;
+  color: var(--primary-dark);
+}
+
+.unread-count-badge {
+  background: #e74c3c;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 12px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.message-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mark-all-read-btn {
+  border: 1px solid var(--border-light);
+  background: #fff;
+  color: var(--accent-red);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mark-all-read-btn:hover:not(:disabled) {
+  background: var(--bg-beige);
+  border-color: var(--accent-brown);
+}
+
+.mark-all-read-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.message-list {
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+.message-loading {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.message-loading i {
+  font-size: 1.5rem;
+}
+
+.message-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  display: flex;
+  gap: 10px;
+}
+
+.message-item:hover {
+  background: var(--bg-cream);
+}
+
+.message-item.unread {
+  background: rgba(196, 93, 43, 0.05);
+}
+
+.message-item.unread:hover {
+  background: rgba(196, 93, 43, 0.1);
+}
+
+.message-item:last-child {
+  border-bottom: none;
+}
+
+.message-item-indicator {
+  flex-shrink: 0;
+  padding-top: 4px;
+}
+
+.unread-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: #e74c3c;
+  border-radius: 50%;
+}
+
+.message-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.message-item-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-item-text {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.4;
+}
+
+.message-item-time {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
+.message-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.message-empty i {
+  font-size: 2.5rem;
+  opacity: 0.5;
+}
+
+.message-dropdown-footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-light);
+  background: #fff;
+}
+
+.view-all-messages-btn {
+  width: 100%;
+  padding: 8px;
+  background: transparent;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  color: var(--accent-red);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.view-all-messages-btn:hover {
+  background: var(--bg-cream);
   border-color: var(--accent-brown);
 }
 

@@ -1,16 +1,23 @@
 <script setup>
 import { useRouter } from 'vue-router'
+import { computed } from 'vue'
 import ShinWeeklySchedule from '../components/anime/ShinWeeklySchedule.vue'
+import MyFollowingList from '../components/anime/MyFollowingList.vue'
 
 const router = useRouter()
 
 const goToAnime = (animeId) => {
   router.push(`/anime/${animeId}`)
 }
+
+const isLoggedIn = computed(() => {
+  return !!localStorage.getItem('token')
+})
 </script>
 
 <template>
   <div class="home-container">
+    <MyFollowingList :is-logged-in="isLoggedIn" @select-anime="goToAnime" />
     <ShinWeeklySchedule @select-anime="goToAnime" />
   </div>
 </template>

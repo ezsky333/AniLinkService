@@ -1,0 +1,234 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20-anime-follow-table
+      author: anilink
+      changes:
+        - createTable:
+            tableName: anime_follow
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+              - column:
+                  name: user_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: anime_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: anime_title
+                  type: VARCHAR(500)
+              - column:
+                  name: image_url
+                  type: VARCHAR(1000)
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  defaultValue: 'watching'
+                  constraints:
+                    nullable: false
+              - column:
+                  name: tags
+                  type: VARCHAR(500)
+              - column:
+                  name: follow_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+        - createIndex:
+            tableName: anime_follow
+            indexName: idx_follow_user_anime
+            columns:
+              - column:
+                  name: user_id
+              - column:
+                  name: anime_id
+        - createIndex:
+            tableName: anime_follow
+            indexName: idx_follow_user
+            columns:
+              - column:
+                  name: user_id
+        - createIndex:
+            tableName: anime_follow
+            indexName: idx_follow_updated
+            columns:
+              - column:
+                  name: updated_at
+        - createIndex:
+            tableName: anime_follow
+            indexName: idx_follow_anime
+            columns:
+              - column:
+                  name: anime_id
+
+  - changeSet:
+      id: 21-play-history-table
+      author: anilink
+      changes:
+        - createTable:
+            tableName: play_history
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+              - column:
+                  name: user_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: anime_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: anime_title
+                  type: VARCHAR(500)
+              - column:
+                  name: video_id
+                  type: BIGINT
+              - column:
+                  name: video_name
+                  type: VARCHAR(1000)
+              - column:
+                  name: progress_seconds
+                  type: BIGINT
+                  defaultValueNumeric: 0
+              - column:
+                  name: duration_seconds
+                  type: BIGINT
+              - column:
+                  name: progress_percentage
+                  type: INT
+                  defaultValueNumeric: 0
+              - column:
+                  name: is_completed
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: last_play_time
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+        - createIndex:
+            tableName: play_history
+            indexName: idx_history_user_anime
+            columns:
+              - column:
+                  name: user_id
+              - column:
+                  name: anime_id
+        - createIndex:
+            tableName: play_history
+            indexName: idx_history_user
+            columns:
+              - column:
+                  name: user_id
+        - createIndex:
+            tableName: play_history
+            indexName: idx_history_updated
+            columns:
+              - column:
+                  name: last_play_time
+
+  - changeSet:
+      id: 22-messages-table
+      author: anilink
+      changes:
+        - createTable:
+            tableName: messages
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+              - column:
+                  name: user_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: type
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: title
+                  type: VARCHAR(200)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: content
+                  type: TEXT
+              - column:
+                  name: anime_id
+                  type: BIGINT
+              - column:
+                  name: anime_title
+                  type: VARCHAR(500)
+              - column:
+                  name: video_id
+                  type: BIGINT
+              - column:
+                  name: episode_id
+                  type: VARCHAR(255)
+              - column:
+                  name: is_read
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: read_at
+                  type: TIMESTAMP
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+        - createIndex:
+            tableName: messages
+            indexName: idx_msg_user
+            columns:
+              - column:
+                  name: user_id
+        - createIndex:
+            tableName: messages
+            indexName: idx_msg_created
+            columns:
+              - column:
+                  name: created_at
+        - createIndex:
+            tableName: messages
+            indexName: idx_msg_read
+            columns:
+              - column:
+                  name: is_read
