@@ -2,17 +2,20 @@
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import { askAppConfirm, showAppMessage } from '../../../utils/ui-feedback'
+import MediaRematchDialog from '../../../components/admin/media/MediaRematchDialog.vue'
 
 const API_BASE = '/api'
 
 const mediaFiles = ref([])
 const loading = ref(false)
 const detailDialog = ref(false)
-const editDialog = ref(false)
 const selectedLibraryId = ref(null)
+const searchKeyword = ref('')
+const matchedFilter = ref(null)
 const mediaLibraries = ref([])
-const queueStatus = ref(null)
 const reprocessingLibraryId = ref(null)
+const rematchDialog = ref(false)
+const rematchTargetFile = ref(null)
 
 const pagination = ref({
   page: 1,
@@ -21,20 +24,15 @@ const pagination = ref({
 })
 
 const selectedFile = ref(null)
-const editingFile = ref({
-  episodeId: '',
-  animeId: null,
-  animeTitle: '',
-  episodeTitle: ''
-})
 
 const headers = [
   { title: '文件名', key: 'fileName', width: '30%' },
   { title: '大小', key: 'size', width: '10%' },
   { title: '状态', key: 'metadataFetched', width: '10%' },
+  { title: '弹幕匹配', key: 'matchStatus', width: '10%' },
   { title: '视频编码', key: 'videoCodec', width: '12%' },
   { title: '分辨率', key: 'resolution', width: '12%' },
-  { title: '操作', key: 'actions', width: '26%', sortable: false }
+  { title: '操作', key: 'actions', width: '30%', sortable: false }
 ]
 
 // 获取媒体库列表
@@ -60,6 +58,12 @@ const fetchMediaFiles = async (pageNum = 1) => {
     if (selectedLibraryId.value) {
       params.libraryId = selectedLibraryId.value
     }
+    if (searchKeyword.value.trim()) {
+      params.keyword = searchKeyword.value.trim()
+    }
+    if (matchedFilter.value !== null) {
+      params.matched = matchedFilter.value
+    }
 
     const res = await axios.get(`${API_BASE}/media-files`, { params })
     if (res.data?.code === 200 && res.data?.data) {
@@ -74,56 +78,24 @@ const fetchMediaFiles = async (pageNum = 1) => {
   }
 }
 
-// 获取队列状态
-const fetchQueueStatus = async () => {
-  try {
-    const res = await axios.get(`${API_BASE}/media-files/queue/status`)
-    if (res.data?.code === 200) {
-      queueStatus.value = res.data.data
-    }
-  } catch (error) {
-    console.error('获取队列状态失败:', error)
-  }
+const openRematchDialog = (file) => {
+  rematchTargetFile.value = file
+  rematchDialog.value = true
+}
+
+const closeRematchDialog = () => {
+  rematchDialog.value = false
+  rematchTargetFile.value = null
+}
+
+const handleRematchApplied = async () => {
+  await fetchMediaFiles(pagination.value.page)
 }
 
 // 查看文件详情
 const viewFileDetail = (file) => {
   selectedFile.value = { ...file }
   detailDialog.value = true
-}
-
-// 编辑文件信息
-const editFile = (file) => {
-  selectedFile.value = file
-  editingFile.value = {
-    episodeId: file.episodeId || '',
-    animeId: file.animeId || null,
-    animeTitle: file.animeTitle || '',
-    episodeTitle: file.episodeTitle || ''
-  }
-  editDialog.value = true
-}
-
-// 保存编辑
-const saveEdit = async () => {
-  if (!selectedFile.value?.id) return
-
-  loading.value = true
-  try {
-    const res = await axios.put(`${API_BASE}/media-files/${selectedFile.value.id}`, editingFile.value)
-    if (res.data?.code === 200) {
-      showAppMessage('更新成功', 'success')
-      editDialog.value = false
-      pagination.value.page = 1
-      await fetchMediaFiles(1)
-    } else {
-      showAppMessage(res.data?.msg || '更新失败', 'error')
-    }
-  } catch (error) {
-    showAppMessage('更新失败: ' + (error.response?.data?.msg || error.message), 'error')
-  } finally {
-    loading.value = false
-  }
 }
 
 // 删除文件
@@ -177,9 +149,8 @@ const reprocessMetadata = async (libraryId) => {
     const res = await axios.post(`${API_BASE}/media-files/reprocess-metadata/${libraryId}`)
     if (res.data?.code === 200) {
       showAppMessage('已提交重新获取任务', 'success')
-      // 5秒后刷新队列状态和文件列表
+      // 延迟刷新文件列表，等待后台任务状态更新
       setTimeout(() => {
-        fetchQueueStatus()
         fetchMediaFiles(1)
       }, 5000)
     } else {
@@ -228,6 +199,29 @@ const handleLibraryChange = () => {
   fetchMediaFiles(1)
 }
 
+const handleFilterSearch = () => {
+  pagination.value.page = 1
+  fetchMediaFiles(1)
+}
+
+const resetFilters = () => {
+  searchKeyword.value = ''
+  matchedFilter.value = null
+  selectedLibraryId.value = null
+  pagination.value.page = 1
+  fetchMediaFiles(1)
+}
+
+const getMatchStatusMeta = (status) => {
+  if (status === 'MATCHED') {
+    return { color: 'success', text: '已匹配' }
+  }
+  if (status === 'NO_MATCH_FOUND') {
+    return { color: 'warning', text: '无匹配' }
+  }
+  return { color: 'grey', text: '未匹配' }
+}
+
 // 页码或每页大小变化
 const onTableOptionsChange = (options) => {
   const page = options.page || 1
@@ -249,7 +243,6 @@ onMounted(() => {
   pagination.value.page = 1
   fetchLibraries()
   fetchMediaFiles(1)
-  fetchQueueStatus()
 })
 </script>
 
@@ -258,42 +251,68 @@ onMounted(() => {
     <!-- 操作工具栏 -->
     <v-card class="mb-4">
       <v-card-text class="pa-4">
-        <div class="d-flex gap-2 align-center flex-wrap">
-          <v-select
-            v-model="selectedLibraryId"
-            :items="mediaLibraries"
-            item-title="name"
-            item-value="id"
-            label="选择媒体库"
-            variant="outlined"
-            density="compact"
-            style="max-width: 300px"
-            @update:model-value="handleLibraryChange"
-            clearable
-          />
-          <v-btn
-            v-if="selectedLibraryId"
-            color="warning"
-            variant="elevated"
-            size="small"
-            :loading="reprocessingLibraryId === selectedLibraryId"
-            @click="reprocessMetadata(selectedLibraryId)"
-          >
-            <v-icon start>mdi-refresh</v-icon>
-            重新获取元数据
-          </v-btn>
-          <v-spacer />
-
-          <!-- 队列状态 -->
-          <v-chip
-            v-if="queueStatus"
-            prepend-icon="mdi-queue"
-            variant="outlined"
-            color="info"
-          >
-            待处理: {{ queueStatus.pendingTasks }} | 活跃: {{ queueStatus.activeThreads }}/{{ queueStatus.maxPoolSize }}
-          </v-chip>
-        </div>
+        <v-row dense class="align-center">
+          <v-col cols="12" md="3">
+            <v-select
+              v-model="selectedLibraryId"
+              :items="mediaLibraries"
+              item-title="name"
+              item-value="id"
+              label="媒体库"
+              variant="outlined"
+              density="compact"
+              hide-details
+              @update:model-value="handleLibraryChange"
+              clearable
+            />
+          </v-col>
+          <v-col cols="12" md="4">
+            <v-text-field
+              v-model="searchKeyword"
+              label="文件名"
+              variant="outlined"
+              density="compact"
+              prepend-inner-icon="mdi-magnify"
+              hide-details
+              clearable
+              @keyup.enter="handleFilterSearch"
+            />
+          </v-col>
+          <v-col cols="12" md="3">
+            <v-select
+              v-model="matchedFilter"
+              :items="[
+                { title: '全部匹配状态', value: null },
+                { title: '仅已匹配', value: true },
+                { title: '仅未匹配', value: false }
+              ]"
+              item-title="title"
+              item-value="value"
+              label="弹幕匹配"
+              variant="outlined"
+              density="compact"
+              hide-details
+              @update:model-value="handleFilterSearch"
+            />
+          </v-col>
+          <v-col cols="12" md="2" class="d-flex ga-2 justify-md-end">
+            <v-btn color="primary" variant="elevated" size="small" @click="handleFilterSearch">查询</v-btn>
+            <v-btn color="grey" variant="text" size="small" @click="resetFilters">重置</v-btn>
+          </v-col>
+          <v-col cols="12" class="d-flex">
+            <v-btn
+              v-if="selectedLibraryId"
+              color="warning"
+              variant="outlined"
+              size="small"
+              :loading="reprocessingLibraryId === selectedLibraryId"
+              @click="reprocessMetadata(selectedLibraryId)"
+            >
+              <v-icon start>mdi-refresh</v-icon>
+              重新获取元数据
+            </v-btn>
+          </v-col>
+        </v-row>
       </v-card-text>
     </v-card>
 
@@ -324,6 +343,16 @@ onMounted(() => {
           </v-chip>
         </template>
 
+        <template v-slot:item.matchStatus="{ item }">
+          <v-chip
+            :color="getMatchStatusMeta(item.matchStatus).color"
+            size="small"
+            label
+          >
+            {{ getMatchStatusMeta(item.matchStatus).text }}
+          </v-chip>
+        </template>
+
         <template v-slot:item.videoCodec="{ item }">
           <span class="text-caption">{{ item.videoCodec || '-' }}</span>
         </template>
@@ -333,7 +362,7 @@ onMounted(() => {
         </template>
 
         <template v-slot:item.actions="{ item }">
-          <div class="d-flex gap-1">
+          <div class="d-flex align-center ga-1">
             <v-btn
               icon="mdi-eye"
               variant="text"
@@ -341,13 +370,19 @@ onMounted(() => {
               color="info"
               @click="viewFileDetail(item)"
             />
-            <v-btn
-              icon="mdi-pencil"
-              variant="text"
-              size="x-small"
-              color="primary"
-              @click="editFile(item)"
-            />
+            <v-tooltip location="top" text="重新搜索匹配">
+              <template #activator="{ props }">
+                <v-btn
+                  icon="mdi-sync"
+                  variant="text"
+                  size="x-small"
+                  color="primary"
+                  :disabled="loading"
+                  v-bind="props"
+                  @click="openRematchDialog(item)"
+                />
+              </template>
+            </v-tooltip>
             <v-menu>
               <template v-slot:activator="{ props }">
                 <v-btn
@@ -378,6 +413,13 @@ onMounted(() => {
         </template>
       </v-data-table-server>
     </v-card>
+
+    <MediaRematchDialog
+      v-model="rematchDialog"
+      :media-file="rematchTargetFile"
+      @applied="handleRematchApplied"
+      @update:model-value="(value) => { if (!value) closeRematchDialog() }"
+    />
 
     <!-- 文件详情对话框 -->
     <v-dialog v-model="detailDialog" max-width="900">
@@ -475,75 +517,8 @@ onMounted(() => {
 
         <v-card-actions class="pa-4">
           <v-spacer />
-          <v-btn color="primary" variant="elevated" @click="editFile(selectedFile)">
-            编辑信息
-          </v-btn>
           <v-btn color="grey" variant="text" @click="detailDialog = false">
             关闭
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-
-    <!-- 编辑对话框 -->
-    <v-dialog v-model="editDialog" max-width="600">
-      <v-card v-if="selectedFile">
-        <v-toolbar color="primary" flat>
-          <v-toolbar-title class="text-white">编辑文件信息</v-toolbar-title>
-          <v-spacer />
-          <v-btn icon="mdi-close" color="white" @click="editDialog = false" />
-        </v-toolbar>
-
-        <v-card-text class="pa-6">
-          <v-form>
-            <v-text-field
-              v-model="editingFile.animeTitle"
-              label="番名"
-              variant="outlined"
-              color="primary"
-              class="mb-4"
-            />
-
-            <v-text-field
-              v-model="editingFile.episodeTitle"
-              label="话数 / 标题"
-              variant="outlined"
-              color="primary"
-              class="mb-4"
-            />
-
-            <v-text-field
-              v-model.number="editingFile.animeId"
-              label="番号"
-              type="number"
-              variant="outlined"
-              color="primary"
-              class="mb-4"
-            />
-
-            <v-text-field
-              v-model="editingFile.episodeId"
-              label="弹幕库 ID"
-              variant="outlined"
-              color="primary"
-            />
-          </v-form>
-        </v-card-text>
-
-        <v-divider />
-
-        <v-card-actions class="pa-4">
-          <v-spacer />
-          <v-btn color="grey" variant="text" @click="editDialog = false">
-            取消
-          </v-btn>
-          <v-btn
-            color="primary"
-            variant="elevated"
-            :loading="loading"
-            @click="saveEdit"
-          >
-            保存
           </v-btn>
         </v-card-actions>
       </v-card>

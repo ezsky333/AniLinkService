@@ -8,18 +8,21 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import xyz.ezsky.anilink.model.dto.MediaFileDTO;
+import xyz.ezsky.anilink.model.dto.MatchResult;
 import xyz.ezsky.anilink.model.dto.UpdateMediaFileRequest;
 import xyz.ezsky.anilink.model.entity.MatchStatus;
 import xyz.ezsky.anilink.model.entity.MediaFile;
-import xyz.ezsky.anilink.model.entity.MediaLibrary;
 import xyz.ezsky.anilink.model.vo.MatchProgressVO;
 import xyz.ezsky.anilink.model.vo.MetadataProgressVO;
 import xyz.ezsky.anilink.model.vo.PageVO;
 import xyz.ezsky.anilink.repository.MediaFileRepository;
 import xyz.ezsky.anilink.repository.MediaLibraryRepository;
 
+import java.nio.file.Paths;
+import java.util.Arrays;
 import java.io.File;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
@@ -47,6 +50,12 @@ public class MediaFileService {
     @Autowired
     private MediaMatchQueueManager mediaMatchQueueManager;
 
+    @Autowired
+    private DandanMatchService dandanMatchService;
+
+    @Autowired
+    private MediaHashService mediaHashService;
+
     /**
      * 分页查询媒体文件
      * 
@@ -55,39 +64,76 @@ public class MediaFileService {
      * @param pageSize 每页大小
      * @return 分页结果
      */
-    public PageVO<MediaFileDTO> getMediaFiles(Long libraryId, int page, int pageSize) {
+    public PageVO<MediaFileDTO> getMediaFiles(Long libraryId, int page, int pageSize, String keyword, Boolean matched) {
         Pageable pageable = PageRequest.of(page, pageSize);
-        Page<MediaFile> result;
 
-        if (libraryId != null) {
-            // 特定媒体库的媒体文件
-            List<MediaFile> files = mediaFileRepository.findByLibraryId(libraryId);
-            int start = page * pageSize;
-            int end = Math.min((page + 1) * pageSize, files.size());
-            List<MediaFile> pageContent = files.subList(start, Math.min(end, files.size()));
-            
-            return PageVO.<MediaFileDTO>builder()
-                    .content(pageContent.stream().map(this::toDTO).collect(Collectors.toList()))
-                    .totalElements(files.size())
-                    .totalPages((files.size() + pageSize - 1) / pageSize)
-                    .currentPage(page)
-                    .pageSize(pageSize)
-                    .hasNext(end < files.size())
-                    .hasPrevious(page > 0)
-                    .build();
-        } else {
-            // 查询所有媒体文件
-            result = mediaFileRepository.findAll(pageable);
-            return PageVO.<MediaFileDTO>builder()
-                    .content(result.getContent().stream().map(this::toDTO).collect(Collectors.toList()))
-                    .totalElements(result.getTotalElements())
-                    .totalPages(result.getTotalPages())
-                    .currentPage(result.getNumber())
-                    .pageSize(result.getSize())
-                    .hasNext(result.hasNext())
-                    .hasPrevious(result.hasPrevious())
-                    .build();
+        String normalizedKeyword = keyword == null ? null : keyword.trim();
+        if (normalizedKeyword != null && normalizedKeyword.isEmpty()) {
+            normalizedKeyword = null;
         }
+
+        List<MatchStatus> matchStatuses = resolveMatchStatuses(matched);
+        Page<MediaFile> result = mediaFileRepository.searchMediaFiles(libraryId, normalizedKeyword, matchStatuses, pageable);
+
+        return PageVO.<MediaFileDTO>builder()
+                .content(result.getContent().stream().map(this::toDTO).collect(Collectors.toList()))
+                .totalElements(result.getTotalElements())
+                .totalPages(result.getTotalPages())
+                .currentPage(result.getNumber())
+                .pageSize(result.getSize())
+                .hasNext(result.hasNext())
+                .hasPrevious(result.hasPrevious())
+                .build();
+    }
+
+    /**
+     * 重新搜索并更新单个视频文件的弹幕匹配结果。
+     */
+    public MediaFileDTO rematchMediaFile(Long fileId) {
+        MediaFile mediaFile = mediaFileRepository.findById(fileId)
+                .orElseThrow(() -> new IllegalArgumentException("媒体文件不存在"));
+
+        ensureHash(mediaFile);
+
+        Map<String, Object> fileInfo = DandanMatchService.createFileInfo(
+                mediaFile.getFileName(),
+                mediaFile.getHash(),
+                mediaFile.getSize()
+        );
+        List<MatchResult> matchResults = dandanMatchService.batchMatch(List.of(fileInfo));
+
+        if (matchResults.isEmpty()) {
+            mediaFile.setMatchStatus(MatchStatus.NO_MATCH_FOUND);
+        } else {
+            MatchResult result = matchResults.get(0);
+            if (Boolean.TRUE.equals(result.getSuccess())) {
+                mediaFile.setMatchStatus(MatchStatus.MATCHED);
+                mediaFile.setEpisodeId(result.getEpisodeId());
+                mediaFile.setAnimeId(result.getAnimeId());
+                mediaFile.setAnimeTitle(result.getAnimeTitle());
+                mediaFile.setEpisodeTitle(result.getEpisodeTitle());
+            } else {
+                mediaFile.setMatchStatus(MatchStatus.NO_MATCH_FOUND);
+                mediaFile.setEpisodeId(null);
+                mediaFile.setAnimeId(null);
+                mediaFile.setAnimeTitle(null);
+                mediaFile.setEpisodeTitle(null);
+            }
+        }
+
+        mediaFileRepository.save(mediaFile);
+        return toDTO(mediaFile);
+    }
+
+    /**
+     * 仅获取单个视频文件的自动匹配候选原始结果，不直接写回数据库。
+     */
+    public String getRematchCandidatesRaw(Long fileId) {
+        MediaFile mediaFile = mediaFileRepository.findById(fileId)
+                .orElseThrow(() -> new IllegalArgumentException("媒体文件不存在"));
+
+        ensureHash(mediaFile);
+        return dandanMatchService.matchRawByFile(mediaFile.getFileName(), mediaFile.getHash(), mediaFile.getSize());
     }
 
     /**
@@ -263,6 +309,31 @@ public class MediaFileService {
         );
     }
 
+    private List<MatchStatus> resolveMatchStatuses(Boolean matched) {
+        if (matched == null) {
+            return null;
+        }
+        if (matched) {
+            return List.of(MatchStatus.MATCHED);
+        }
+        return Arrays.asList(MatchStatus.UNMATCHED, MatchStatus.NO_MATCH_FOUND);
+    }
+
+    private void ensureHash(MediaFile mediaFile) {
+        if (mediaFile.getHash() != null && !mediaFile.getHash().isEmpty()) {
+            return;
+        }
+
+        try {
+            String hash = mediaHashService.calculateHash(Paths.get(mediaFile.getFilePath()));
+            if (hash != null && !hash.isEmpty()) {
+                mediaFile.setHash(hash);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to calculate hash for fileId={}, path={}", mediaFile.getId(), mediaFile.getFilePath(), e);
+        }
+    }
+
     /**
      * Entity to DTO 转换
      */
@@ -293,6 +364,7 @@ public class MediaFileService {
                 .videoCodec(entity.getVideoCodec())
                 .audioCodec(entity.getAudioCodec())
                 .metadataFetched(entity.getMetadataFetched())
+                .matchStatus(entity.getMatchStatus())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();

@@ -94,6 +94,33 @@ public class DandanMatchService {
         }
     }
 
+    /**
+     * 调用 /api/v2/match 返回原始结果，用于前端展示候选并手动选择。
+     */
+    public String matchRawByFile(String fileName, String hash, Long fileSize) {
+        try {
+            Map<String, Object> item = new HashMap<>();
+            if (fileName != null) item.put("fileName", fileName);
+            if (hash != null) item.put("fileHash", hash);
+            if (fileSize != null) item.put("fileSize", fileSize);
+            item.put("matchMode", "hashAndFileName");
+
+            ResponseEntity<String> resp = client.post(DANDAN_BASE, "/api/v2/match", item);
+            if (!resp.getStatusCode().is2xxSuccessful()) {
+                return null;
+            }
+
+            String body = resp.getBody();
+            if (body == null || body.isEmpty()) {
+                return null;
+            }
+            return body;
+        } catch (Exception e) {
+            log.error("Dandan raw match call failed for fileName={}", fileName, e);
+            return null;
+        }
+    }
+
     private AnimeInfo findAnimeInfo(JsonNode node) {
         if (node == null) return null;
 

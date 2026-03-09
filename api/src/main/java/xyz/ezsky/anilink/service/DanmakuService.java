@@ -88,6 +88,39 @@ public class DanmakuService {
     }
 
     /**
+     * 代理弹弹 /api/v2/search/episodes 接口。
+     *
+     * @param anime 动漫标题关键词
+     * @param episode 剧集关键词
+     * @param tmdbId TMDB ID
+     * @return 原始 JSON
+     */
+    public String searchEpisodes(String anime, String episode, String tmdbId) {
+        String path = "/api/v2/search/episodes";
+        Map<String, String> queryParams = new HashMap<>();
+
+        if (StringUtils.hasText(anime)) {
+            queryParams.put("anime", anime.trim());
+        }
+        if (StringUtils.hasText(episode)) {
+            queryParams.put("episode", episode.trim());
+        }
+        if (StringUtils.hasText(tmdbId)) {
+            queryParams.put("tmdbId", tmdbId.trim());
+        }
+
+        if (!queryParams.containsKey("anime") && !queryParams.containsKey("tmdbId")) {
+            throw new IllegalArgumentException("anime 和 tmdbId 至少提供一个");
+        }
+
+        ResponseEntity<String> response = dandanClientUtil.get(DANDAN_BASE, path, queryParams);
+        if (!response.getStatusCode().is2xxSuccessful() || !StringUtils.hasText(response.getBody())) {
+            return null;
+        }
+        return response.getBody();
+    }
+
+    /**
      * 构建弹幕缓存键
      */
     private String buildCommentCacheKey(Long episodeId, Boolean withRelated) {

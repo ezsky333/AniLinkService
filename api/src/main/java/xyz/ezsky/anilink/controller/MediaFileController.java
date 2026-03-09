@@ -3,6 +3,8 @@ package xyz.ezsky.anilink.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
@@ -57,11 +59,53 @@ public class MediaFileController {
     public ApiResponseVO<PageVO<MediaFileDTO>> getMediaFiles(
             @Parameter(description = "媒体库ID，不提供则查询所有", required = false)
             @RequestParam(required = false) Long libraryId,
+            @Parameter(description = "文件名关键词（模糊匹配）", required = false)
+            @RequestParam(required = false) String keyword,
+            @Parameter(description = "弹幕是否已匹配：true=仅已匹配，false=仅未匹配", required = false)
+            @RequestParam(required = false) Boolean matched,
             @Parameter(description = "页码，从0开始", required = false)
             @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "每页大小", required = false)
             @RequestParam(defaultValue = "20") int pageSize) {
-        return ApiResponseVO.success(mediaFileService.getMediaFiles(libraryId, page, pageSize));
+        return ApiResponseVO.success(mediaFileService.getMediaFiles(libraryId, page, pageSize, keyword, matched));
+    }
+
+    @Operation(summary = "重新搜索并更新文件匹配", description = "根据文件名、Hash、文件大小重新调用弹弹匹配并回写匹配结果")
+    @SaCheckRole("super-admin")
+    @PostMapping("/{id}/rematch")
+    public ApiResponseVO<MediaFileDTO> rematchMediaFile(
+            @Parameter(description = "媒体文件ID")
+            @PathVariable Long id) {
+        try {
+            MediaFileDTO dto = mediaFileService.rematchMediaFile(id);
+            return ApiResponseVO.success(dto, "已完成重新匹配");
+        } catch (IllegalArgumentException e) {
+            return ApiResponseVO.fail(404, e.getMessage());
+        } catch (Exception e) {
+            return ApiResponseVO.fail("重新匹配失败: " + e.getMessage());
+        }
+    }
+
+    @Operation(summary = "获取文件重匹配候选", description = "调用弹弹 /api/v2/match 获取候选数组，供前端手动选择")
+    @SaCheckRole("super-admin")
+    @GetMapping("/{id}/rematch-candidates")
+    public ApiResponseVO<Object> getRematchCandidates(
+            @Parameter(description = "媒体文件ID")
+            @PathVariable Long id) {
+        try {
+            String raw = mediaFileService.getRematchCandidatesRaw(id);
+            if (raw == null) {
+                return ApiResponseVO.fail(404, "未找到匹配候选");
+            }
+            Object json = new ObjectMapper().readValue(raw, Object.class);
+            return ApiResponseVO.success(json);
+        } catch (IllegalArgumentException e) {
+            return ApiResponseVO.fail(404, e.getMessage());
+        } catch (JsonProcessingException e) {
+            return ApiResponseVO.fail(500, "匹配结果解析失败");
+        } catch (Exception e) {
+            return ApiResponseVO.fail("获取匹配候选失败: " + e.getMessage());
+        }
     }
 
     @Operation(summary = "获取媒体文件详情", description = "根据ID获取单个媒体文件的完整信息，包括所有技术元数据")

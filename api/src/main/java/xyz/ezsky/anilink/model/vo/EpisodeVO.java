@@ -2,6 +2,7 @@ package xyz.ezsky.anilink.model.vo;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
+import xyz.ezsky.anilink.model.entity.MatchStatus;
 
 import java.sql.Timestamp;
 
@@ -59,6 +60,9 @@ public class EpisodeVO {
     
     @Schema(description = "是否已获取完整元数据")
     private Boolean metadataFetched;
+
+    @Schema(description = "弹幕匹配状态")
+    private MatchStatus matchStatus;
     
     @Schema(description = "创建时间")
     private Timestamp createdAt;

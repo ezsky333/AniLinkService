@@ -6,6 +6,8 @@ import xyz.ezsky.anilink.repository.base.BaseRepository;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -43,6 +45,19 @@ public interface MediaFileRepository extends BaseRepository<MediaFile, Long> {
     Page<MediaFile> findByMatchStatusIn(List<MatchStatus> matchStatuses, Pageable pageable);
 
     Page<MediaFile> findByLibraryIdAndMatchStatusIn(Long libraryId, List<MatchStatus> matchStatuses, Pageable pageable);
+
+        @Query("""
+            SELECT m FROM MediaFile m
+            WHERE (:libraryId IS NULL OR m.library.id = :libraryId)
+              AND (:keyword IS NULL OR LOWER(m.fileName) LIKE LOWER(CONCAT('%', :keyword, '%')))
+              AND (:matchStatuses IS NULL OR m.matchStatus IN :matchStatuses)
+            """)
+        Page<MediaFile> searchMediaFiles(
+            @Param("libraryId") Long libraryId,
+            @Param("keyword") String keyword,
+            @Param("matchStatuses") List<MatchStatus> matchStatuses,
+            Pageable pageable
+        );
 
     /**
      * 查询库中指定匹配状态的文件

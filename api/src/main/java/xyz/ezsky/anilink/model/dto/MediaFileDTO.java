@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import xyz.ezsky.anilink.model.entity.MatchStatus;
 
 import java.sql.Timestamp;
 
@@ -45,6 +46,7 @@ public class MediaFileDTO {
     private String videoCodec;
     private String audioCodec;
     private Boolean metadataFetched;
+    private MatchStatus matchStatus;
     
     private Timestamp createdAt;
     private Timestamp updatedAt;

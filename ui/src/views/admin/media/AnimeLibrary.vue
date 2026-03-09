@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { formatAnimeType } from '../../../utils/animeType'
+import MediaRematchDialog from '../../../components/admin/media/MediaRematchDialog.vue'
 
 const API_BASE = '/api'
 
@@ -11,6 +12,8 @@ const selectedAnime = ref(null)
 const episodes = ref([])
 const episodesLoading = ref(false)
 const dialogOpen = ref(false)
+const rematchDialog = ref(false)
+const rematchTargetFile = ref(null)
 
 // episodes pagination state for server-side paging
 const episodesPagination = ref({
@@ -39,10 +42,12 @@ const animeHeaders = [
 const episodeHeaders = [
   { title: '文件名', key: 'fileName' },
   { title: '剧集名称', key: 'episodeTitle' },
+  { title: '匹配状态', key: 'matchStatus', sortable: false },
   { title: '分辨率', key: 'resolution', sortable: false },
   { title: '时长', key: 'durationStr', sortable: false },
   { title: '文件大小', key: 'sizeStr', sortable: false },
-  { title: '编码', key: 'videoFormat', sortable: false }
+  { title: '编码', key: 'videoFormat', sortable: false },
+  { title: '操作', key: 'actions', sortable: false }
 ]
 
 // 获取所有动漫
@@ -193,6 +198,32 @@ const onEpisodesOptionsChange = (options) => {
     if (selectedAnime.value) {
       fetchEpisodes(selectedAnime.value.animeId, page)
     }
+  }
+}
+
+const getMatchStatusMeta = (status) => {
+  if (status === 'MATCHED') {
+    return { color: 'success', text: '已匹配' }
+  }
+  if (status === 'NO_MATCH_FOUND') {
+    return { color: 'warning', text: '无匹配' }
+  }
+  return { color: 'grey', text: '未匹配' }
+}
+
+const openRematchDialog = (episode) => {
+  rematchTargetFile.value = episode
+  rematchDialog.value = true
+}
+
+const closeRematchDialog = () => {
+  rematchDialog.value = false
+  rematchTargetFile.value = null
+}
+
+const handleRematchApplied = async () => {
+  if (selectedAnime.value) {
+    await fetchEpisodes(selectedAnime.value.animeId, episodesPagination.value.page)
   }
 }
 
@@ -428,6 +459,12 @@ const onEpisodesOptionsChange = (options) => {
                 </v-chip>
               </template>
 
+              <template v-slot:item.matchStatus="{ item }">
+                <v-chip size="x-small" :color="getMatchStatusMeta(item.matchStatus).color" variant="tonal">
+                  {{ getMatchStatusMeta(item.matchStatus).text }}
+                </v-chip>
+              </template>
+
               <template v-slot:item.durationStr="{ item }">
                 <div class="text-caption">{{ item.durationStr }}</div>
               </template>
@@ -442,6 +479,18 @@ const onEpisodesOptionsChange = (options) => {
                 </v-chip>
               </template>
 
+              <template v-slot:item.actions="{ item }">
+                <v-btn
+                  size="x-small"
+                  variant="text"
+                  color="primary"
+                  @click="openRematchDialog(item)"
+                >
+                  <v-icon start>mdi-sync</v-icon>
+                  重搜匹配
+                </v-btn>
+              </template>
+
               <template v-slot:no-data>
                 <div class="text-center py-6 text-grey">
                   <v-icon size="48" class="mb-2">mdi-file-video-outline</v-icon>
@@ -453,6 +502,13 @@ const onEpisodesOptionsChange = (options) => {
         </v-card-text>
       </v-card>
     </v-dialog>
+
+    <MediaRematchDialog
+      v-model="rematchDialog"
+      :media-file="rematchTargetFile"
+      @applied="handleRematchApplied"
+      @update:model-value="(value) => { if (!value) closeRematchDialog() }"
+    />
   </div>
 </template>
 

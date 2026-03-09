@@ -54,4 +54,33 @@ public class DanmakuController {
             return ApiResponseVO.fail(500, "弹幕数据解析失败");
         }
     }
+
+    @Operation(
+        summary = "搜索剧集",
+        description = "代理弹弹play /api/v2/search/episodes 接口，支持按动漫标题、剧集关键词或 tmdbId 搜索匹配候选。"
+    )
+    @GetMapping("/search/episodes")
+    public ApiResponseVO<Object> searchEpisodes(
+            @Parameter(description = "动漫标题关键词", required = false)
+            @RequestParam(required = false) String anime,
+            @Parameter(description = "剧集关键词", required = false)
+            @RequestParam(required = false) String episode,
+            @Parameter(description = "TMDB ID", required = false)
+            @RequestParam(required = false) String tmdbId) {
+        try {
+            String rawJson = danmakuService.searchEpisodes(anime, episode, tmdbId);
+            if (rawJson == null) {
+                return ApiResponseVO.fail(404, "未找到匹配结果");
+            }
+
+            Object json = new ObjectMapper().readValue(rawJson, Object.class);
+            return ApiResponseVO.success(json);
+        } catch (IllegalArgumentException e) {
+            return ApiResponseVO.fail(400, e.getMessage());
+        } catch (JsonProcessingException e) {
+            return ApiResponseVO.fail(500, "搜索结果解析失败");
+        } catch (Exception e) {
+            return ApiResponseVO.fail("搜索剧集失败: " + e.getMessage());
+        }
+    }
 }
