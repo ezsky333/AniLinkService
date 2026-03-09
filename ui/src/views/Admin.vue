@@ -26,7 +26,6 @@ const menuItems = [
 ]
 
 const userInfo = ref(null)
-const userMenu = ref(false)
 
 // 获取当前用户信息
 const fetchUserInfo = async () => {
@@ -86,9 +85,8 @@ onMounted(() => {
     <v-navigation-drawer v-model="drawer" :rail="false">
       <v-list>
         <v-list-item
-          prepend-avatar="https://cdn.vuetifyjs.com/images/john.png"
+          prepend-icon="mdi-account-circle"
           :title="userInfo?.username || 'Admin'"
-          :subtitle="userInfo?.email || '暂无邮箱'"
         >
           <template v-if="userInfo?.roleCodeList && userInfo.roleCodeList.length > 0" v-slot:append>
             <v-chip size="x-small" color="primary">
@@ -128,35 +126,10 @@ onMounted(() => {
       <v-app-bar-nav-icon @click="drawer = !drawer"></v-app-bar-nav-icon>
       <v-app-bar-title class="text-white">管理后台</v-app-bar-title>
       <v-spacer />
-      <v-menu v-model="userMenu">
-        <template v-slot:activator="{ props }">
-          <v-btn icon v-bind="props">
-            <v-avatar color="white">
-              <v-icon color="primary">mdi-account</v-icon>
-            </v-avatar>
-          </v-btn>
-        </template>
-        <v-list>
-          <v-list-item>
-            <v-list-item-title class="font-weight-medium">{{ userInfo?.username }}</v-list-item-title>
-            <v-list-item-subtitle>
-              {{ userInfo?.email || '暂无邮箱' }}
-              <template v-if="userInfo?.roleCodeList && userInfo.roleCodeList.length > 0">
-                <v-chip size="x-small" class="ml-2" color="primary">
-                  {{ userInfo.roleCodeList.join(', ') }}
-                </v-chip>
-              </template>
-            </v-list-item-subtitle>
-          </v-list-item>
-          <v-divider />
-          <v-list-item @click="router.push('/')">
-            <v-list-item-title>
-              <v-icon start>mdi-home</v-icon>
-              返回首页
-            </v-list-item-title>
-          </v-list-item>
-        </v-list>
-      </v-menu>
+      <v-btn variant="text" color="white" @click="router.push('/')">
+        <v-icon start>mdi-home</v-icon>
+        返回首页
+      </v-btn>
     </v-app-bar>
 
     <v-main class="bg-grey-lighten-5">
