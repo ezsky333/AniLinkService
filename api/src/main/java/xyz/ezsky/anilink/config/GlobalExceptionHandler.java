@@ -5,6 +5,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import cn.dev33.satoken.exception.NotLoginException;
+import cn.dev33.satoken.exception.NotRoleException;
 import cn.hutool.http.HttpStatus;
 import xyz.ezsky.anilink.model.vo.ApiResponseVO;
 
@@ -16,6 +17,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponseVO<String>> handleUnauthorizedException(NotLoginException e) {
         return ResponseEntity.status(HttpStatus.HTTP_UNAUTHORIZED)
                 .body(ApiResponseVO.fail(e.getMessage()));
+    }
+
+    // 处理权限不足异常
+    @ExceptionHandler(NotRoleException.class)
+    public ResponseEntity<ApiResponseVO<String>> handleForbiddenException(NotRoleException e) {
+        return ResponseEntity.status(HttpStatus.HTTP_FORBIDDEN)
+                .body(ApiResponseVO.fail(HttpStatus.HTTP_FORBIDDEN, e.getMessage()));
     }
     
     // 处理运行时异常

@@ -2,18 +2,30 @@ package xyz.ezsky.anilink.service;
 
 import cn.hutool.crypto.SecureUtil;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import xyz.ezsky.anilink.model.entity.User;
 import xyz.ezsky.anilink.model.entity.Role;
 import xyz.ezsky.anilink.model.entity.UserRole;
+import xyz.ezsky.anilink.model.dto.UpdateUserManageRequest;
+import xyz.ezsky.anilink.model.vo.PageVO;
+import xyz.ezsky.anilink.model.vo.RoleOptionVO;
+import xyz.ezsky.anilink.model.vo.UserManageVO;
 import xyz.ezsky.anilink.repository.UserRepository;
 import xyz.ezsky.anilink.repository.RoleRepository;
 import xyz.ezsky.anilink.repository.UserRoleRepository;
 import xyz.ezsky.anilink.model.vo.UserInfoVO;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 用户服务类
@@ -29,6 +41,9 @@ public class UserService {
     
     @Autowired
     private UserRoleRepository userRoleRepository;
+
+    @Autowired
+    private RoleInterfaceImpl roleInterfaceImpl;
     
     /**
      * 根据用户名查询用户
@@ -175,6 +190,158 @@ public class UserService {
         userInfoVO.setIsActive(user.getIsActive());
 
         return userInfoVO;
+    }
+
+    /**
+     * 分页查询用户列表（管理端）
+     */
+    public PageVO<UserManageVO> getUsersPage(int page, int pageSize, String keyword) {
+        Pageable pageable = PageRequest.of(page, pageSize);
+        Page<User> userPage;
+
+        if (keyword == null || keyword.isBlank()) {
+            userPage = userRepository.findAll(pageable);
+        } else {
+            String normalized = keyword.trim();
+            userPage = userRepository.findByUsernameContainingIgnoreCaseOrEmailContainingIgnoreCase(
+                    normalized,
+                    normalized,
+                    pageable
+            );
+        }
+
+        List<UserManageVO> content = userPage.getContent().stream()
+                .map(this::toUserManageVO)
+                .collect(Collectors.toList());
+
+        return PageVO.<UserManageVO>builder()
+                .content(content)
+                .totalElements(userPage.getTotalElements())
+                .totalPages(userPage.getTotalPages())
+                .currentPage(userPage.getNumber())
+                .pageSize(userPage.getSize())
+                .hasNext(userPage.hasNext())
+                .hasPrevious(userPage.hasPrevious())
+                .build();
+    }
+
+    /**
+     * 获取可分配角色列表（仅启用角色）
+     */
+    public List<RoleOptionVO> getActiveRoleOptions() {
+        return roleRepository.findByIsActiveTrue().stream()
+                .map(role -> new RoleOptionVO(
+                        role.getId(),
+                        role.getRoleCode(),
+                        role.getRoleName(),
+                        role.getDescription()
+                ))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 管理端更新用户资料、角色、启用状态
+     */
+    @Transactional
+    public void updateUserByAdmin(Long userId, UpdateUserManageRequest request, Long operatorUserId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("用户不存在"));
+
+        String username = request.getUsername() == null ? "" : request.getUsername().trim();
+        if (username.isBlank()) {
+            throw new RuntimeException("用户名不能为空");
+        }
+
+        Optional<User> byUsername = userRepository.findByUsername(username);
+        if (byUsername.isPresent() && !byUsername.get().getId().equals(userId)) {
+            throw new RuntimeException("用户名已存在");
+        }
+
+        String email = request.getEmail();
+        if (email != null) {
+            email = email.trim();
+            if (email.isBlank()) {
+                email = null;
+            }
+        }
+        if (email != null) {
+            Optional<User> byEmail = userRepository.findByEmail(email);
+            if (byEmail.isPresent() && !byEmail.get().getId().equals(userId)) {
+                throw new RuntimeException("邮箱已被占用");
+            }
+        }
+
+        Boolean isActive = request.getIsActive();
+        if (isActive == null) {
+            throw new RuntimeException("启用状态不能为空");
+        }
+        if (Boolean.FALSE.equals(isActive) && userId.equals(operatorUserId)) {
+            throw new RuntimeException("不能禁用当前登录账号");
+        }
+
+        List<String> requestedRoleCodes = request.getRoleCodeList();
+        if (requestedRoleCodes == null || requestedRoleCodes.isEmpty()) {
+            throw new RuntimeException("至少需要分配一个角色");
+        }
+
+        Set<String> normalizedRoleCodes = requestedRoleCodes.stream()
+                .filter(code -> code != null && !code.isBlank())
+                .map(String::trim)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        if (normalizedRoleCodes.isEmpty()) {
+            throw new RuntimeException("至少需要分配一个角色");
+        }
+
+        List<Role> roles = roleRepository.findByRoleCodeInAndIsActiveTrue(new ArrayList<>(normalizedRoleCodes));
+        if (roles.size() != normalizedRoleCodes.size()) {
+            throw new RuntimeException("存在无效或已禁用角色");
+        }
+
+        user.setUsername(username);
+        user.setEmail(email);
+        user.setIsActive(isActive);
+        userRepository.save(user);
+
+        Set<Long> targetRoleIds = roles.stream()
+                .map(Role::getId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        List<UserRole> existingRelations = userRoleRepository.findByUserId(userId);
+        Set<Long> existingRoleIds = existingRelations.stream()
+                .map(UserRole::getRoleId)
+                .collect(Collectors.toCollection(HashSet::new));
+
+        List<UserRole> toDelete = existingRelations.stream()
+                .filter(rel -> !targetRoleIds.contains(rel.getRoleId()))
+                .collect(Collectors.toList());
+        if (!toDelete.isEmpty()) {
+            userRoleRepository.deleteAll(toDelete);
+        }
+
+        for (Long roleId : targetRoleIds) {
+            if (!existingRoleIds.contains(roleId)) {
+                UserRole userRole = new UserRole();
+                userRole.setUserId(userId);
+                userRole.setRoleId(roleId);
+                userRoleRepository.save(userRole);
+            }
+        }
+
+        roleInterfaceImpl.refreshUserRoleCache(userId);
+    }
+
+    private UserManageVO toUserManageVO(User user) {
+        List<String> roleCodes = userRoleRepository.findRoleCodesByUserId(user.getId());
+        return new UserManageVO(
+                user.getId(),
+                user.getUsername(),
+                user.getEmail(),
+                user.getIsActive(),
+                roleCodes,
+                user.getCreatedAt(),
+                user.getUpdatedAt()
+        );
     }
 }
 

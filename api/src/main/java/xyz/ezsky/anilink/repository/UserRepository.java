@@ -1,6 +1,8 @@
 package xyz.ezsky.anilink.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 import xyz.ezsky.anilink.model.entity.User;
 
@@ -36,4 +38,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
      * 检查邮箱是否存在
      */
     boolean existsByEmail(String email);
+
+    /**
+     * 按用户名/邮箱模糊分页查询
+     */
+    Page<User> findByUsernameContainingIgnoreCaseOrEmailContainingIgnoreCase(
+            String usernameKeyword,
+            String emailKeyword,
+            Pageable pageable
+    );
 }
