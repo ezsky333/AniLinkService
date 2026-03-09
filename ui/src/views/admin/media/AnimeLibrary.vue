@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
-import { formatAnimeType } from '../../utils/animeType'
+import { formatAnimeType } from '../../../utils/animeType'
 
 const API_BASE = '/api'
 

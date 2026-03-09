@@ -11,21 +11,29 @@ const selectedItem = ref('system')
 
 const SystemInfo = defineAsyncComponent(() => import('./admin/SystemInfo.vue'))
 const SiteConfig = defineAsyncComponent(() => import('./admin/SiteConfig.vue'))
-const MediaLibrary = defineAsyncComponent(() => import('./admin/MediaLibrary.vue'))
-const VideoFileManager = defineAsyncComponent(() => import('./admin/VideoFileManager.vue'))
-const AnimeLibrary = defineAsyncComponent(() => import('./admin/AnimeLibrary.vue'))
-const QueueProgress = defineAsyncComponent(() => import('./admin/QueueProgress.vue'))
+const MediaLibrary = defineAsyncComponent(() => import('./admin/media/MediaLibrary.vue'))
+const VideoFileManager = defineAsyncComponent(() => import('./admin/media/VideoFileManager.vue'))
+const AnimeLibrary = defineAsyncComponent(() => import('./admin/media/AnimeLibrary.vue'))
+const QueueProgress = defineAsyncComponent(() => import('./admin/media/QueueProgress.vue'))
 const UserManagement = defineAsyncComponent(() => import('./admin/UserManagement.vue'))
 
-const menuItems = [
+const mainMenuItems = [
   { id: 'system', title: '系统信息', icon: 'mdi-information', component: SystemInfo },
+  { id: 'users', title: '用户管理', icon: 'mdi-account-cog', component: UserManagement }
+]
+
+const siteMenuItem = { id: 'site', title: '服务配置', icon: 'mdi-web', component: SiteConfig }
+
+const mediaMenuItems = [
   { id: 'queue', title: '队列进度', icon: 'mdi-progress-clock', component: QueueProgress },
-  { id: 'site', title: '站点配置', icon: 'mdi-web', component: SiteConfig },
-  { id: 'users', title: '用户管理', icon: 'mdi-account-cog', component: UserManagement },
+    { id: 'anime', title: '动漫管理', icon: 'mdi-library', component: AnimeLibrary },
   { id: 'media', title: '媒体库配置', icon: 'mdi-folder-multiple', component: MediaLibrary },
-  { id: 'anime', title: '动漫库管理', icon: 'mdi-library', component: AnimeLibrary },
   { id: 'files', title: '视频文件管理', icon: 'mdi-file-video', component: VideoFileManager }
 ]
+
+const componentMap = Object.fromEntries(
+  [...mainMenuItems, ...mediaMenuItems, siteMenuItem].map(item => [item.id, item.component])
+)
 
 const userInfo = ref(null)
 
@@ -69,8 +77,7 @@ const handleLogout = () => {
 }
 
 const currentComponent = computed(() => {
-  const item = menuItems.find(i => i.id === selectedItem.value)
-  return item ? item.component : menuItems[0].component
+  return componentMap[selectedItem.value] || mainMenuItems[0].component
 })
 
 const handleSelectMenu = (id) => {
@@ -102,13 +109,46 @@ onMounted(() => {
 
       <v-list density="compact" nav>
         <v-list-item
-          v-for="item in menuItems"
+          v-for="item in mainMenuItems"
           :key="item.id"
           :value="item.id"
           :active="selectedItem === item.id"
           @click="handleSelectMenu(item.id)"
           :prepend-icon="item.icon"
           :title="item.title"
+          color="primary"
+          link
+        ></v-list-item>
+
+        <v-list-group value="media-management">
+          <template #activator="{ props }">
+            <v-list-item
+              v-bind="props"
+              prepend-icon="mdi-folder-cog"
+              title="媒体管理"
+            />
+          </template>
+
+          <v-list-item
+            v-for="item in mediaMenuItems"
+            :key="item.id"
+            :value="item.id"
+            :active="selectedItem === item.id"
+            @click="handleSelectMenu(item.id)"
+            :prepend-icon="item.icon"
+            :title="item.title"
+            class="pl-6"
+            color="primary"
+            link
+          ></v-list-item>
+        </v-list-group>
+
+        <v-list-item
+          :value="siteMenuItem.id"
+          :active="selectedItem === siteMenuItem.id"
+          @click="handleSelectMenu(siteMenuItem.id)"
+          :prepend-icon="siteMenuItem.icon"
+          :title="siteMenuItem.title"
           color="primary"
           link
         ></v-list-item>

@@ -108,9 +108,10 @@ onUnmounted(() => {
       </v-card-text>
     </v-card>
 
-    <div class="d-flex gap-0" style="flex-wrap: wrap;">
+    <v-row dense>
+      <v-col cols="12" md="6">
       <!-- 元数据进度卡片 -->
-      <v-card class="flex-grow-1" style="min-width: 300px; margin: 12px;">
+      <v-card class="h-100">
         <v-card-title class="d-flex align-center gap-2 pb-2">
           <v-icon color="info">mdi-database-refresh</v-icon>
           元数据扫描
@@ -167,9 +168,11 @@ onUnmounted(() => {
           </div>
         </v-card-text>
       </v-card>
+      </v-col>
 
+      <v-col cols="12" md="6">
       <!-- 弹幕匹配进度卡片 -->
-      <v-card class="flex-grow-1" style="min-width: 300px; margin: 12px;">
+      <v-card class="h-100">
         <v-card-title class="d-flex align-center gap-2 pb-2">
           <v-icon color="success">mdi-sync</v-icon>
           弹幕匹配
@@ -227,7 +230,8 @@ onUnmounted(() => {
           </div>
         </v-card-text>
       </v-card>
-    </div>
+      </v-col>
+    </v-row>
 
     <!-- 汇总信息 -->
     <v-card class="mt-4" v-if="metadataProgress || matchProgress">

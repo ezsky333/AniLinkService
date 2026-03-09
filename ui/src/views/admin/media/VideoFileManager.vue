@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
-import { askAppConfirm, showAppMessage } from '../../utils/ui-feedback'
+import { askAppConfirm, showAppMessage } from '../../../utils/ui-feedback'
 
 const API_BASE = '/api'
 
