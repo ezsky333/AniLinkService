@@ -54,7 +54,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/eventhorizonsky/anilinkserver
+          images: ghcr.io/${{ github.actor }}/anilinkserver
           tags: |
             type=raw,value=latest
             type=sha,format=short
