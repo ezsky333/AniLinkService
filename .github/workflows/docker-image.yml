@@ -7,7 +7,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    if: github.repository == 'eventhorizonsky/AniLinkService'
     permissions:
       contents: read
       packages: write
