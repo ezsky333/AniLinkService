@@ -37,12 +37,21 @@
               <i class="mdi mdi-account"></i>
             </button>
             <div v-if="userMenuOpen" class="user-dropdown">
-              <a v-if="!isLoggedIn" href="#" @click.prevent="showLoginDialog = true" class="dropdown-item">
+              <a v-if="!isLoggedIn" href="#" @click.prevent="showLoginDialog = true; userMenuOpen = false" class="dropdown-item">
                 <i class="mdi mdi-login"></i>
                 <span>登录</span>
               </a>
+              <a
+                v-if="!isLoggedIn && isRegisterOpen"
+                href="#"
+                @click.prevent="openRegisterDialog(); userMenuOpen = false"
+                class="dropdown-item"
+              >
+                <i class="mdi mdi-account-plus"></i>
+                <span>注册</span>
+              </a>
 
-              <template v-else>
+              <template v-if="isLoggedIn">
                 <div class="dropdown-header">
                   <span class="username">{{ currentUser }}</span>
                 </div>
@@ -51,17 +60,15 @@
                   <span>个人中心</span>
                 </a>
                 <div class="dropdown-divider"></div>
+                <a v-if="isAdmin" href="#" @click.prevent="goToAdmin" class="dropdown-item">
+                  <i class="mdi mdi-cog"></i>
+                  <span>后台管理</span>
+                </a>
+                <a href="#" @click.prevent="handleLogout" class="dropdown-item logout">
+                  <i class="mdi mdi-logout"></i>
+                  <span>登出</span>
+                </a>
               </template>
-
-              <a v-if="isAdmin" href="#" @click.prevent="goToAdmin" class="dropdown-item">
-                <i class="mdi mdi-cog"></i>
-                <span>后台管理</span>
-              </a>
-
-              <a v-if="isLoggedIn" href="#" @click.prevent="handleLogout" class="dropdown-item logout">
-                <i class="mdi mdi-logout"></i>
-                <span>登出</span>
-              </a>
             </div>
           </div>
         </div>
@@ -76,7 +83,7 @@
     </main>
 
     <!-- 登录对话框 -->
-    <div v-if="showLoginDialog" class="login-modal-overlay" @click="showLoginDialog = false">
+    <div v-if="showLoginDialog" class="login-modal-overlay" @click.self="showLoginDialog = false">
       <div class="login-modal" @click.stop>
         <div class="login-header">
           <h2>用户登录</h2>
@@ -87,9 +94,9 @@
 
         <div class="login-body">
           <input
-            v-model="loginForm.username"
+            v-model="loginForm.account"
             type="text"
-            placeholder="用户名"
+            placeholder="用户名或邮箱"
             class="login-input"
             @keyup.enter="handleLogin"
           />
@@ -103,9 +110,63 @@
         </div>
 
         <div class="login-footer">
+          <button v-if="isRegisterOpen" class="btn-cancel" @click="openRegisterDialog">去注册</button>
           <button class="btn-cancel" @click="showLoginDialog = false">取消</button>
           <button class="btn-login" @click="handleLogin" :disabled="loginLoading">
             {{ loginLoading ? '登录中...' : '登录' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 注册对话框 -->
+    <div v-if="showRegisterDialog" class="login-modal-overlay" @click.self="showRegisterDialog = false">
+      <div class="login-modal" @click.stop>
+        <div class="login-header">
+          <h2>用户注册</h2>
+          <button class="close-btn" @click="showRegisterDialog = false">
+            <i class="mdi mdi-close"></i>
+          </button>
+        </div>
+
+        <div class="login-body">
+          <input v-model="registerForm.username" type="text" placeholder="用户名" class="login-input" />
+          <input v-model="registerForm.email" type="email" placeholder="邮箱" class="login-input" />
+          <input v-model="registerForm.password" type="password" placeholder="密码" class="login-input" />
+          <input
+            v-model="registerForm.confirmPassword"
+            type="password"
+            placeholder="确认密码"
+            class="login-input"
+          />
+          <div class="captcha-row">
+            <input
+              v-model="registerForm.captchaCode"
+              type="text"
+              placeholder="图形验证码"
+              class="login-input"
+            />
+            <img
+              v-if="captchaImage"
+              :src="captchaImageSrc"
+              class="captcha-image"
+              alt="captcha"
+              @click="refreshCaptcha"
+            />
+          </div>
+          <div class="captcha-row">
+            <input v-model="registerForm.emailCode" type="text" placeholder="邮箱验证码" class="login-input" />
+            <button class="btn-cancel send-code-btn" :disabled="sendCodeDisabled" @click="sendEmailCode">
+              {{ sendCodeText }}
+            </button>
+          </div>
+        </div>
+
+        <div class="login-footer">
+          <button class="btn-cancel" @click="openLoginDialog">去登录</button>
+          <button class="btn-cancel" @click="showRegisterDialog = false">取消</button>
+          <button class="btn-login" @click="handleRegister" :disabled="registerLoading">
+            {{ registerLoading ? '注册中...' : '注册' }}
           </button>
         </div>
       </div>
@@ -114,38 +175,42 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
+import { showAppMessage } from '../utils/ui-feedback'
 
 const API_BASE = '/api'
 const DEFAULT_SITE_NAME = 'AniLink'
 const router = useRouter()
 const searchQuery = ref('')
 const showLoginDialog = ref(false)
+const showRegisterDialog = ref(false)
 const loginLoading = ref(false)
+const registerLoading = ref(false)
+const sendCodeLoading = ref(false)
+const sendCodeCountdown = ref(0)
 const userMenuOpen = ref(false)
 const siteConfig = ref(null)
 const userInfo = ref(null)
+const captchaId = ref('')
+const captchaImage = ref('')
 
 const loginForm = ref({
-  username: '',
+  account: '',
   password: ''
 })
 
-// 配置axios请求拦截器，自动添加token
-axios.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token')
-    if (token) {
-      config.headers['satoken'] = token
-    }
-    return config
-  },
-  (error) => {
-    return Promise.reject(error)
-  }
-)
+const registerForm = ref({
+  username: '',
+  email: '',
+  password: '',
+  confirmPassword: '',
+  captchaCode: '',
+  emailCode: ''
+})
+
+let countdownTimer = null
 
 // 获取当前用户信息
 const fetchUserInfo = async () => {
@@ -184,6 +249,34 @@ const isLoggedIn = computed(() => {
   return !!localStorage.getItem('token') && !!userInfo.value
 })
 
+const isRegisterOpen = computed(() => {
+  return !!siteConfig.value?.authRegisterEnabled
+})
+
+const sendCodeDisabled = computed(() => {
+  return sendCodeLoading.value || sendCodeCountdown.value > 0
+})
+
+const sendCodeText = computed(() => {
+  if (sendCodeLoading.value) {
+    return '发送中...'
+  }
+  if (sendCodeCountdown.value > 0) {
+    return `${sendCodeCountdown.value}s`
+  }
+  return '发送验证码'
+})
+
+const captchaImageSrc = computed(() => {
+  if (!captchaImage.value) {
+    return ''
+  }
+  if (captchaImage.value.startsWith('data:image/')) {
+    return captchaImage.value
+  }
+  return `data:image/png;base64,${captchaImage.value}`
+})
+
 const currentUser = computed(() => {
   return userInfo.value?.username || ''
 })
@@ -213,6 +306,13 @@ onMounted(() => {
   checkLoginStatus()
 })
 
+onBeforeUnmount(() => {
+  if (countdownTimer) {
+    clearInterval(countdownTimer)
+    countdownTimer = null
+  }
+})
+
 const loadSiteConfig = () => {
   try {
     const stored = localStorage.getItem('siteConfig')
@@ -233,15 +333,15 @@ const handleSearch = () => {
 }
 
 const handleLogin = async () => {
-  if (!loginForm.value.username || !loginForm.value.password) {
-    alert('请输入用户名和密码')
+  if (!loginForm.value.account || !loginForm.value.password) {
+    showAppMessage('请输入用户名/邮箱和密码', 'warning')
     return
   }
 
   loginLoading.value = true
   try {
     const res = await axios.post(`${API_BASE}/auth/login`, {
-      username: loginForm.value.username,
+      account: loginForm.value.account,
       password: loginForm.value.password
     })
 
@@ -249,22 +349,149 @@ const handleLogin = async () => {
       const { tokenValue } = res.data.data
       localStorage.setItem('token', tokenValue)
       
-      if (loginForm.value.rememberMe) {
-        localStorage.setItem('rememberMe', 'true')
-      }
-
       // 登录成功后获取用户信息
       await fetchUserInfo()
 
+      showAppMessage('登录成功', 'success')
       showLoginDialog.value = false
-      loginForm.value = { username: '', password: '', rememberMe: false }
+      userMenuOpen.value = false
+      loginForm.value = { account: '', password: '' }
     } else {
-      alert(res.data?.msg || '登录失败')
+      showAppMessage(res.data?.msg || '登录失败', 'error')
     }
   } catch (error) {
-    alert(error.response?.data?.msg || '登录失败，请重试')
+    showAppMessage(error.response?.data?.msg || '登录失败，请重试', 'error')
   } finally {
     loginLoading.value = false
+  }
+}
+
+const refreshCaptcha = async () => {
+  try {
+    const res = await axios.get(`${API_BASE}/auth/captcha`)
+    if (res.data?.code === 200 && res.data?.data) {
+      captchaId.value = res.data.data.captchaId
+      captchaImage.value = res.data.data.imageBase64
+      registerForm.value.captchaCode = ''
+    }
+  } catch (error) {
+    console.error('获取图形验证码失败:', error)
+  }
+}
+
+const openLoginDialog = () => {
+  showRegisterDialog.value = false
+  showLoginDialog.value = true
+  userMenuOpen.value = false
+}
+
+const openRegisterDialog = async () => {
+  if (!isRegisterOpen.value) {
+    return
+  }
+  showLoginDialog.value = false
+  showRegisterDialog.value = true
+  userMenuOpen.value = false
+  await refreshCaptcha()
+}
+
+const startSendCodeCountdown = (seconds) => {
+  if (countdownTimer) {
+    clearInterval(countdownTimer)
+  }
+  sendCodeCountdown.value = seconds
+  countdownTimer = setInterval(() => {
+    if (sendCodeCountdown.value <= 1) {
+      clearInterval(countdownTimer)
+      countdownTimer = null
+      sendCodeCountdown.value = 0
+      return
+    }
+    sendCodeCountdown.value -= 1
+  }, 1000)
+}
+
+const sendEmailCode = async () => {
+  if (!registerForm.value.email) {
+    showAppMessage('请输入邮箱', 'warning')
+    return
+  }
+  if (!registerForm.value.captchaCode) {
+    showAppMessage('请输入图形验证码', 'warning')
+    return
+  }
+  if (!captchaId.value) {
+    await refreshCaptcha()
+    showAppMessage('图形验证码已刷新，请重新输入', 'warning')
+    return
+  }
+
+  sendCodeLoading.value = true
+  try {
+    const res = await axios.post(`${API_BASE}/auth/send-register-email-code`, {
+      email: registerForm.value.email,
+      captchaId: captchaId.value,
+      captchaCode: registerForm.value.captchaCode
+    })
+
+    if (res.data?.code === 200) {
+      showAppMessage('验证码已发送，请检查邮箱', 'success')
+      startSendCodeCountdown(60)
+    } else {
+      showAppMessage(res.data?.msg || '发送失败', 'error')
+      await refreshCaptcha()
+    }
+  } catch (error) {
+    showAppMessage(error.response?.data?.msg || '发送失败，请稍后重试', 'error')
+    await refreshCaptcha()
+  } finally {
+    sendCodeLoading.value = false
+  }
+}
+
+const handleRegister = async () => {
+  if (!registerForm.value.username || !registerForm.value.email || !registerForm.value.password) {
+    showAppMessage('请填写完整注册信息', 'warning')
+    return
+  }
+  if (registerForm.value.password !== registerForm.value.confirmPassword) {
+    showAppMessage('两次密码输入不一致', 'warning')
+    return
+  }
+  if (!registerForm.value.emailCode) {
+    showAppMessage('请输入邮箱验证码', 'warning')
+    return
+  }
+
+  registerLoading.value = true
+  try {
+    const res = await axios.post(`${API_BASE}/auth/register`, {
+      username: registerForm.value.username,
+      email: registerForm.value.email,
+      password: registerForm.value.password,
+      emailCode: registerForm.value.emailCode
+    })
+
+    if (res.data?.code === 200) {
+      showAppMessage('注册成功，请登录', 'success')
+      registerForm.value = {
+        username: '',
+        email: '',
+        password: '',
+        confirmPassword: '',
+        captchaCode: '',
+        emailCode: ''
+      }
+      showRegisterDialog.value = false
+      userMenuOpen.value = false
+      showLoginDialog.value = true
+    } else {
+      showAppMessage(res.data?.msg || '注册失败', 'error')
+    }
+  } catch (error) {
+    showAppMessage(error.response?.data?.msg || '注册失败，请稍后重试', 'error')
+  } finally {
+    registerLoading.value = false
   }
 }
 
@@ -274,6 +501,7 @@ const handleLogout = () => {
   localStorage.removeItem('rememberMe')
   userInfo.value = null
   userMenuOpen.value = false
+  showAppMessage('已登出', 'success')
   router.push('/')
 }
 
@@ -700,6 +928,30 @@ body {
   border-color: var(--accent-brown);
   background: #fff;
   box-shadow: 0 0 0 3px rgba(185, 154, 126, 0.08);
+}
+
+.captcha-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.captcha-row .login-input {
+  flex: 1;
+}
+
+.captcha-image {
+  width: 110px;
+  height: 40px;
+  border-radius: 8px;
+  border: 1px solid #e0d5ca;
+  cursor: pointer;
+  background: #fff;
+}
+
+.send-code-btn {
+  min-width: 110px;
+  white-space: nowrap;
 }
 
 .remember-me {

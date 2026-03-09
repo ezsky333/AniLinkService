@@ -1,23 +1,36 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import { showAppMessage } from '../../utils/ui-feedback'
 
 const API_BASE = '/api'
 
 const loading = ref(false)
 const saving = ref(false)
-const errorMessage = ref('')
-const successMessage = ref('')
+const activeTab = ref('basic')
+const showTestEmailDialog = ref(false)
+const testEmail = ref('')
+const sendingTestEmail = ref(false)
 
 const form = ref({
   siteName: '',
   siteDescription: '',
-  siteUrl: ''
+  siteUrl: '',
+  authRegisterEnabled: false,
+  smtpHost: '',
+  smtpPort: 465,
+  smtpUsername: '',
+  smtpPassword: '',
+  smtpFromEmail: '',
+  smtpFromName: '',
+  smtpSslEnabled: true,
+  smtpStarttlsEnabled: false
 })
 
 // Dandan 字段
 form.value.dandanAppId = ''
 form.value.dandanAppSecret = ''
+form.value.smtpPasswordConfigured = false
 
 const fetchConfig = async () => {
   loading.value = true
@@ -29,7 +42,17 @@ const fetchConfig = async () => {
         siteDescription: res.data.data.siteDescription || '',
         siteUrl: res.data.data.siteUrl || '',
         dandanAppId: res.data.data.dandanAppId || '',
-        dandanAppSecret: res.data.data.dandanAppSecret || ''
+        dandanAppSecret: res.data.data.dandanAppSecret || '',
+        authRegisterEnabled: !!res.data.data.authRegisterEnabled,
+        smtpHost: res.data.data.smtpHost || '',
+        smtpPort: res.data.data.smtpPort || 465,
+        smtpUsername: res.data.data.smtpUsername || '',
+        smtpPassword: '',
+        smtpFromEmail: res.data.data.smtpFromEmail || '',
+        smtpFromName: res.data.data.smtpFromName || '',
+        smtpSslEnabled: res.data.data.smtpSslEnabled !== false,
+        smtpStarttlsEnabled: !!res.data.data.smtpStarttlsEnabled,
+        smtpPasswordConfigured: !!res.data.data.smtpPasswordConfigured
       }
     }
   } catch (error) {
@@ -42,13 +65,11 @@ const fetchConfig = async () => {
 
 const saveConfig = async () => {
   if (!form.value.siteName || !form.value.siteDescription || !form.value.siteUrl) {
-    errorMessage.value = '请填写所有必填项'
+    showAppMessage('请填写所有必填项', 'warning')
     return
   }
 
   saving.value = true
-  errorMessage.value = ''
-  successMessage.value = ''
 
   try {
     const res = await axios.put(`${API_BASE}/site/config`, {
@@ -57,21 +78,57 @@ const saveConfig = async () => {
       siteUrl: form.value.siteUrl
         ,
         dandanAppId: form.value.dandanAppId,
-        dandanAppSecret: form.value.dandanAppSecret
+        dandanAppSecret: form.value.dandanAppSecret,
+        authRegisterEnabled: form.value.authRegisterEnabled,
+        smtpHost: form.value.smtpHost,
+        smtpPort: form.value.smtpPort,
+        smtpUsername: form.value.smtpUsername,
+        smtpPassword: form.value.smtpPassword || null,
+        smtpFromEmail: form.value.smtpFromEmail,
+        smtpFromName: form.value.smtpFromName,
+        smtpSslEnabled: form.value.smtpSslEnabled,
+        smtpStarttlsEnabled: form.value.smtpStarttlsEnabled
     })
 
     if (res.data?.code === 200) {
-      successMessage.value = '保存成功'
-      setTimeout(() => {
-        successMessage.value = ''
-      }, 3000)
+      showAppMessage('保存成功', 'success')
     } else {
-      errorMessage.value = res.data?.msg || '保存失败'
+      showAppMessage(res.data?.msg || '保存失败', 'error')
     }
   } catch (error) {
-    errorMessage.value = error.response?.data?.msg || '保存失败，请稍后重试'
+    showAppMessage(error.response?.data?.msg || '保存失败，请稍后重试', 'error')
   } finally {
     saving.value = false
+  }
+}
+
+const openTestEmailDialog = () => {
+  testEmail.value = ''
+  showTestEmailDialog.value = true
+}
+
+const sendTestEmail = async () => {
+  if (!testEmail.value) {
+    showAppMessage('请填写测试收件邮箱', 'warning')
+    return
+  }
+
+  sendingTestEmail.value = true
+
+  try {
+    const res = await axios.post(`${API_BASE}/site/test-email`, {
+      toEmail: testEmail.value
+    })
+    if (res.data?.code === 200) {
+      showAppMessage('测试邮件已发送，请检查邮箱', 'success')
+      showTestEmailDialog.value = false
+    } else {
+      showAppMessage(res.data?.msg || '测试邮件发送失败', 'error')
+    }
+  } catch (error) {
+    showAppMessage(error.response?.data?.msg || '测试邮件发送失败，请稍后重试', 'error')
+  } finally {
+    sendingTestEmail.value = false
   }
 }
 
@@ -82,78 +139,226 @@ onMounted(() => {
 
 <template>
   <div>
-    <v-alert v-if="errorMessage" type="error" class="mb-4" closable>
-      {{ errorMessage }}
-    </v-alert>
-    <v-alert v-if="successMessage" type="success" class="mb-4" closable>
-      {{ successMessage }}
-    </v-alert>
-
     <v-card>
       <v-card-title>
         <v-icon start>mdi-web</v-icon>
         站点配置
       </v-card-title>
       <v-card-text>
+        <v-tabs v-model="activeTab" color="primary" class="mb-4 site-config-tabs">
+          <v-tab value="basic">
+            <v-icon start>mdi-tune</v-icon>
+            站点基础配置
+          </v-tab>
+          <v-tab value="user">
+            <v-icon start>mdi-account-cog</v-icon>
+            用户配置
+          </v-tab>
+          <v-tab value="integration">
+            <v-icon start>mdi-link-variant</v-icon>
+            关联配置
+          </v-tab>
+        </v-tabs>
+
         <v-form>
-          <v-text-field
-            v-model="form.siteName"
-            label="站点名称"
-            prepend-inner-icon="mdi-label"
-            variant="outlined"
-            color="primary"
-            required
-            class="mb-4"
-          />
-          <v-textarea
-            v-model="form.siteDescription"
-            label="站点描述"
-            prepend-inner-icon="mdi-text"
-            variant="outlined"
-            color="primary"
-            rows="3"
-            class="mb-4"
-          />
-          <v-text-field
-            v-model="form.siteUrl"
-            label="站点 URL"
-            prepend-inner-icon="mdi-link"
-            variant="outlined"
-            color="primary"
-            required
-          />
+          <v-window v-model="activeTab">
+            <v-window-item value="basic">
+              <h3 class="text-h6 mb-4 text-primary font-weight-medium">
+                <v-icon start color="primary">mdi-tune</v-icon>
+                站点基础配置
+              </h3>
+              <v-text-field
+                v-model="form.siteName"
+                label="站点名称"
+                prepend-inner-icon="mdi-label"
+                variant="outlined"
+                color="primary"
+                required
+                class="mb-4"
+              />
+              <v-textarea
+                v-model="form.siteDescription"
+                label="站点描述"
+                prepend-inner-icon="mdi-text"
+                variant="outlined"
+                color="primary"
+                rows="3"
+                class="mb-4"
+              />
+              <v-text-field
+                v-model="form.siteUrl"
+                label="站点 URL"
+                prepend-inner-icon="mdi-link"
+                variant="outlined"
+                color="primary"
+                required
+              />
+            </v-window-item>
 
-          <v-divider class="my-4" />
+            <v-window-item value="user">
+              <h3 class="text-h6 mb-4 text-primary font-weight-medium">
+                <v-icon start color="primary">mdi-account-plus</v-icon>
+                注册设置
+              </h3>
+              <v-switch
+                v-model="form.authRegisterEnabled"
+                label="允许新用户注册"
+                color="primary"
+                inset
+                class="mb-4"
+              />
 
-          <h3 class="text-h6 mb-4 text-primary font-weight-medium">
-            <v-icon start color="primary">mdi-shield-key</v-icon>
-            Dandan 配置（可选）
-          </h3>
-          <v-text-field
-            v-model="form.dandanAppId"
-            label="Dandan App ID"
-            prepend-inner-icon="mdi-account-key"
-            variant="outlined"
-            color="primary"
-            class="mb-4"
-          />
-          <v-text-field
-            v-model="form.dandanAppSecret"
-            label="Dandan App Secret"
-            type="password"
-            prepend-inner-icon="mdi-lock"
-            variant="outlined"
-            color="primary"
-          />
+              <v-divider class="my-4" />
+
+              <h3 class="text-h6 mb-4 text-primary font-weight-medium">
+                <v-icon start color="primary">mdi-email-fast</v-icon>
+                SMTP 配置（注册验证码）
+              </h3>
+              <v-row dense>
+                <v-col cols="12" md="8">
+                  <v-text-field
+                    v-model="form.smtpHost"
+                    label="SMTP Host"
+                    prepend-inner-icon="mdi-server"
+                    variant="outlined"
+                    color="primary"
+                    class="mb-3"
+                  />
+                </v-col>
+                <v-col cols="12" md="4">
+                  <v-text-field
+                    v-model.number="form.smtpPort"
+                    label="SMTP Port"
+                    type="number"
+                    prepend-inner-icon="mdi-numeric"
+                    variant="outlined"
+                    color="primary"
+                    class="mb-3"
+                  />
+                </v-col>
+
+                <v-col cols="12" md="6">
+                  <v-text-field
+                    v-model="form.smtpUsername"
+                    label="SMTP Username"
+                    prepend-inner-icon="mdi-account"
+                    variant="outlined"
+                    color="primary"
+                    class="mb-3"
+                  />
+                </v-col>
+                <v-col cols="12" md="6">
+                  <v-text-field
+                    v-model="form.smtpPassword"
+                    :hint="form.smtpPasswordConfigured ? '已配置密码，不填则保持不变' : '请输入 SMTP 密码'"
+                    persistent-hint
+                    label="SMTP Password"
+                    type="password"
+                    prepend-inner-icon="mdi-lock"
+                    variant="outlined"
+                    color="primary"
+                    class="mb-3"
+                  />
+                </v-col>
+
+                <v-col cols="12" md="6">
+                  <v-text-field
+                    v-model="form.smtpFromEmail"
+                    label="发件邮箱"
+                    prepend-inner-icon="mdi-email"
+                    variant="outlined"
+                    color="primary"
+                    class="mb-3"
+                  />
+                </v-col>
+                <v-col cols="12" md="6">
+                  <v-text-field
+                    v-model="form.smtpFromName"
+                    label="发件人名称"
+                    prepend-inner-icon="mdi-badge-account"
+                    variant="outlined"
+                    color="primary"
+                    class="mb-3"
+                  />
+                </v-col>
+
+                <v-col cols="12" md="6">
+                  <v-switch
+                    v-model="form.smtpSslEnabled"
+                    label="启用 SMTP SSL"
+                    color="primary"
+                    inset
+                    class="mt-0"
+                  />
+                </v-col>
+                <v-col cols="12" md="6">
+                  <v-switch
+                    v-model="form.smtpStarttlsEnabled"
+                    label="启用 STARTTLS"
+                    color="primary"
+                    inset
+                    class="mt-0"
+                  />
+                </v-col>
+              </v-row>
+            </v-window-item>
+
+            <v-window-item value="integration">
+              <h3 class="text-h6 mb-4 text-primary font-weight-medium">
+                <v-icon start color="primary">mdi-shield-key</v-icon>
+                弹弹PLAY开放平台配置
+              </h3>
+              <v-text-field
+                v-model="form.dandanAppId"
+                label="Dandan App ID"
+                prepend-inner-icon="mdi-account-key"
+                variant="outlined"
+                color="primary"
+                class="mb-4"
+              />
+              <v-text-field
+                v-model="form.dandanAppSecret"
+                label="Dandan App Secret"
+                type="password"
+                prepend-inner-icon="mdi-lock"
+                variant="outlined"
+                color="primary"
+              />
+            </v-window-item>
+          </v-window>
         </v-form>
       </v-card-text>
       <v-card-actions>
         <v-spacer />
+        <template v-if="activeTab === 'user'">
+          <v-btn
+            color="amber-darken-2"
+            variant="elevated"
+            prepend-icon="mdi-email-check-outline"
+            class="action-btn"
+            @click="openTestEmailDialog"
+          >
+            发送测试邮件
+          </v-btn>
+          <v-btn
+            color="teal-darken-1"
+            variant="elevated"
+            :loading="saving"
+            :disabled="saving"
+            class="action-btn"
+            @click="saveConfig"
+          >
+            <v-icon start>mdi-content-save</v-icon>
+            保存配置
+          </v-btn>
+        </template>
         <v-btn
-          color="primary"
+          v-else
+          color="teal-darken-1"
           variant="elevated"
           :loading="saving"
           :disabled="saving"
+          class="action-btn"
           @click="saveConfig"
         >
           <v-icon start>mdi-content-save</v-icon>
@@ -161,5 +366,49 @@ onMounted(() => {
         </v-btn>
       </v-card-actions>
     </v-card>
+
+    <v-dialog v-model="showTestEmailDialog" max-width="460">
+      <v-card>
+        <v-card-title class="text-h6">
+          <v-icon start color="primary">mdi-email-check-outline</v-icon>
+          发送测试邮件
+        </v-card-title>
+        <v-card-text>
+          <v-text-field
+            v-model="testEmail"
+            label="收件邮箱"
+            type="email"
+            prepend-inner-icon="mdi-email"
+            variant="outlined"
+            color="primary"
+            autofocus
+            placeholder="example@domain.com"
+          />
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="showTestEmailDialog = false">取消</v-btn>
+          <v-btn
+            color="primary"
+            :loading="sendingTestEmail"
+            :disabled="sendingTestEmail"
+            @click="sendTestEmail"
+          >
+            发送
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
+
+<style scoped>
+.site-config-tabs :deep(.v-tab) {
+  border-radius: 8px;
+}
+
+.action-btn {
+  padding-inline: 18px;
+  min-height: 40px;
+}
+</style>

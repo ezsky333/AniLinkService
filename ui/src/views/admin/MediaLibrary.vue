@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import axios from 'axios'
+import { askAppConfirm, showAppMessage } from '../../utils/ui-feedback'
 
 const API_BASE = '/api'
 
@@ -211,7 +212,12 @@ const addLibrary = async () => {
 }
 
 const deleteLibrary = async (id) => {
-  if (!confirm('确定要删除这个媒体库吗？')) return
+  const confirmed = await askAppConfirm({
+    title: '删除媒体库',
+    message: '确定要删除这个媒体库吗？',
+    color: 'error'
+  })
+  if (!confirmed) return
 
   try {
     const res = await axios.delete(`${API_BASE}/media-library/${id}`)
@@ -219,7 +225,7 @@ const deleteLibrary = async (id) => {
       await fetchLibraries()
     }
   } catch (error) {
-    alert('删除失败：' + (error.response?.data?.msg || '请稍后重试'))
+    showAppMessage('删除失败：' + (error.response?.data?.msg || '请稍后重试'), 'error')
   }
 }
 
@@ -228,13 +234,13 @@ const scanLibrary = async (id) => {
   try {
     const res = await axios.post(`${API_BASE}/media-files/reprocess-metadata/${id}`)
     if (res.data?.code === 200) {
-      alert(res.data.msg || '重新获取元数据已触发')
+      showAppMessage(res.data.msg || '重新获取元数据已触发', 'success')
       await fetchLibraries()
       // 启动进度轮询
       startProgressPolling(id)
     }
   } catch (error) {
-    alert('重新获取元数据失败：' + (error.response?.data?.msg || '请稍后重试'))
+    showAppMessage('重新获取元数据失败：' + (error.response?.data?.msg || '请稍后重试'), 'error')
   } finally {
     scanning.value = false
   }
@@ -245,20 +251,25 @@ const rematchLibrary = async (id) => {
   try {
     const res = await axios.post(`${API_BASE}/media-library/rematch/${id}`)
     if (res.data?.code === 200) {
-      alert(res.data.msg || '弹幕重新匹配已触发')
+      showAppMessage(res.data.msg || '弹幕重新匹配已触发', 'success')
       await fetchLibraries()
       // 启动进度轮询
       startProgressPolling(id)
     }
   } catch (error) {
-    alert('重新匹配失败：' + (error.response?.data?.msg || '请稍后重试'))
+    showAppMessage('重新匹配失败：' + (error.response?.data?.msg || '请稍后重试'), 'error')
   } finally {
     scanning.value = false
   }
 }
 
 const scanAll = async () => {
-  if (!confirm('确定要重新获取所有媒体库的元数据吗？')) return
+  const confirmed = await askAppConfirm({
+    title: '批量重新获取元数据',
+    message: '确定要重新获取所有媒体库的元数据吗？',
+    color: 'warning'
+  })
+  if (!confirmed) return
 
   scanning.value = true
   try {
@@ -266,14 +277,14 @@ const scanAll = async () => {
     for (const lib of mediaLibraries.value) {
       await axios.post(`${API_BASE}/media-files/reprocess-metadata/${lib.id}`)
     }
-    alert('所有媒体库的元数据重新获取已提交')
+    showAppMessage('所有媒体库的元数据重新获取已提交', 'success')
     await fetchLibraries()
     // 为所有库启动进度轮询
     mediaLibraries.value.forEach(lib => {
       startProgressPolling(lib.id)
     })
   } catch (error) {
-    alert('提交任务失败：' + (error.response?.data?.msg || '请稍后重试'))
+    showAppMessage('提交任务失败：' + (error.response?.data?.msg || '请稍后重试'), 'error')
   } finally {
     scanning.value = false
   }

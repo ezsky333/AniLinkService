@@ -28,4 +28,31 @@ public class UpdateSiteConfigRequest {
 
     @Schema(description = "Dandan 应用密钥", example = "your_app_secret")
     private String dandanAppSecret;
+
+    @Schema(description = "是否开放注册", example = "false")
+    private Boolean authRegisterEnabled;
+
+    @Schema(description = "SMTP 主机", example = "smtp.qq.com")
+    private String smtpHost;
+
+    @Schema(description = "SMTP 端口", example = "465")
+    private Integer smtpPort;
+
+    @Schema(description = "SMTP 用户名", example = "noreply@example.com")
+    private String smtpUsername;
+
+    @Schema(description = "SMTP 密码", example = "smtp_auth_code")
+    private String smtpPassword;
+
+    @Schema(description = "SMTP 发件邮箱", example = "noreply@example.com")
+    private String smtpFromEmail;
+
+    @Schema(description = "SMTP 发件人", example = "AniLink")
+    private String smtpFromName;
+
+    @Schema(description = "是否启用 SMTP SSL", example = "true")
+    private Boolean smtpSslEnabled;
+
+    @Schema(description = "是否启用 STARTTLS", example = "false")
+    private Boolean smtpStarttlsEnabled;
 }

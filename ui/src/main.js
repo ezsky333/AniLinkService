@@ -10,6 +10,7 @@ import './style.css'
 import './styles/anime.css'
 import App from './App.vue'
 import { md3 } from 'vuetify/blueprints'
+import { setupHttpInterceptors } from './utils/http'
 
 const vuetify = createVuetify({
   components,
@@ -44,5 +45,7 @@ const vuetify = createVuetify({
     },
   },
 })
+
+setupHttpInterceptors()
 
 createApp(App).use(vuetify).use(router).mount('#app')

@@ -31,4 +31,31 @@ public class SiteConfigVO {
 
     @Schema(description = "Dandan 应用密钥，返回时会被原样返回（注意安全风险）", example = "your_app_secret")
     private String dandanAppSecret;
+
+    @Schema(description = "是否开放注册", example = "false")
+    private Boolean authRegisterEnabled;
+
+    @Schema(description = "SMTP 主机", example = "smtp.qq.com")
+    private String smtpHost;
+
+    @Schema(description = "SMTP 端口", example = "465")
+    private Integer smtpPort;
+
+    @Schema(description = "SMTP 用户名", example = "noreply@example.com")
+    private String smtpUsername;
+
+    @Schema(description = "SMTP 发件邮箱", example = "noreply@example.com")
+    private String smtpFromEmail;
+
+    @Schema(description = "SMTP 发件人", example = "AniLink")
+    private String smtpFromName;
+
+    @Schema(description = "是否启用 SMTP SSL", example = "true")
+    private Boolean smtpSslEnabled;
+
+    @Schema(description = "是否启用 STARTTLS", example = "false")
+    private Boolean smtpStarttlsEnabled;
+
+    @Schema(description = "SMTP 密码是否已配置", example = "true")
+    private Boolean smtpPasswordConfigured;
 }

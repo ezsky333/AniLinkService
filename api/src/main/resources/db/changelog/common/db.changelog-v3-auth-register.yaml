@@ -1,0 +1,49 @@
+databaseChangeLog:
+  - changeSet:
+      id: 17-users-email-unique
+      author: anilink
+      preConditions:
+        - onFail: MARK_RAN
+      changes:
+        - addUniqueConstraint:
+            tableName: users
+            columnNames: email
+            constraintName: uk_users_email
+
+  - changeSet:
+      id: 18-auth-site-config-defaults
+      author: anilink
+      preConditions:
+        - onFail: MARK_RAN
+      changes:
+        - sql:
+            sql: |
+              INSERT INTO site_config (config_key, config_value, description, created_at, updated_at)
+              VALUES
+                ('auth_register_enabled', 'false', '是否开放注册', NOW(), NOW()),
+                ('mail_code_expire_seconds', '300', '邮箱验证码过期秒数', NOW(), NOW()),
+                ('mail_send_cooldown_seconds', '60', '邮箱验证码发送冷却秒数', NOW(), NOW()),
+                ('mail_send_daily_limit_per_ip', '30', '单IP每日邮箱验证码发送上限', NOW(), NOW()),
+                ('mail_send_daily_limit_per_email', '10', '单邮箱每日验证码发送上限', NOW(), NOW()),
+                ('register_daily_limit_per_ip', '20', '单IP每日注册上限', NOW(), NOW())
+              ON CONFLICT (config_key) DO NOTHING
+            dbms: postgresql
+
+  - changeSet:
+      id: 19-auth-site-config-defaults-h2
+      author: anilink
+      preConditions:
+        - onFail: MARK_RAN
+      changes:
+        - sql:
+            sql: |
+              MERGE INTO site_config (config_key, config_value, description, created_at, updated_at)
+              KEY(config_key)
+              VALUES
+                ('auth_register_enabled', 'false', '是否开放注册', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                ('mail_code_expire_seconds', '300', '邮箱验证码过期秒数', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                ('mail_send_cooldown_seconds', '60', '邮箱验证码发送冷却秒数', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                ('mail_send_daily_limit_per_ip', '30', '单IP每日邮箱验证码发送上限', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                ('mail_send_daily_limit_per_email', '10', '单邮箱每日验证码发送上限', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                ('register_daily_limit_per_ip', '20', '单IP每日注册上限', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            dbms: h2

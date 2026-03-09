@@ -3,6 +3,7 @@ package xyz.ezsky.anilink.service;
 import cn.hutool.crypto.SecureUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import xyz.ezsky.anilink.model.entity.User;
 import xyz.ezsky.anilink.model.entity.Role;
 import xyz.ezsky.anilink.model.entity.UserRole;
@@ -35,6 +36,13 @@ public class UserService {
     public Optional<User> findByUsername(String username) {
         return userRepository.findByUsername(username);
     }
+
+    /**
+     * 根据邮箱查询用户
+     */
+    public Optional<User> findByEmail(String email) {
+        return userRepository.findByEmail(email);
+    }
     
     /**
      * 验证用户登录
@@ -42,8 +50,8 @@ public class UserService {
      * @param password 明文密码
      * @return 用户对象（如果验证成功），否则为空
      */
-    public Optional<User> validateLogin(String username, String password) {
-        Optional<User> userOpt = userRepository.findByUsername(username);
+    public Optional<User> validateLogin(String account, String password) {
+        Optional<User> userOpt = userRepository.findByUsernameOrEmail(account, account);
         
         if (userOpt.isEmpty()) {
             return Optional.empty();
@@ -76,6 +84,33 @@ public class UserService {
         user.setPasswordHash(encodePassword(password));
         
         return userRepository.save(user);
+    }
+
+    /**
+     * 注册用户并分配默认 user 角色
+     */
+    @Transactional
+    public User registerUser(String username, String password, String email) {
+        if (userRepository.existsByUsername(username)) {
+            throw new RuntimeException("用户名已存在");
+        }
+        if (userRepository.existsByEmail(email)) {
+            throw new RuntimeException("邮箱已被注册");
+        }
+
+        User user = createUser(username, password, email);
+
+        Role userRole = roleRepository.findByRoleCode("user");
+        if (userRole == null) {
+            throw new RuntimeException("系统角色 user 不存在，请检查初始化数据");
+        }
+
+        UserRole relation = new UserRole();
+        relation.setUserId(user.getId());
+        relation.setRoleId(userRole.getId());
+        userRoleRepository.save(relation);
+
+        return user;
     }
     
     /**

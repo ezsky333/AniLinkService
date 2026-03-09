@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import { askAppConfirm, showAppMessage } from '../utils/ui-feedback'
 
 const API_BASE = '/api'
 
@@ -106,7 +107,12 @@ const addLibrary = async () => {
 }
 
 const deleteLibrary = async (id) => {
-  if (!confirm('确定要删除这个媒体库吗？')) return
+  const confirmed = await askAppConfirm({
+    title: '删除媒体库',
+    message: '确定要删除这个媒体库吗？',
+    color: 'error'
+  })
+  if (!confirmed) return
 
   try {
     const res = await axios.delete(`${API_BASE}/init/media-library/${id}`)
@@ -114,7 +120,7 @@ const deleteLibrary = async (id) => {
       await fetchLibraries()
     }
   } catch (error) {
-    alert('删除失败：' + (error.response?.data?.msg || '请稍后重试'))
+    showAppMessage('删除失败：' + (error.response?.data?.msg || '请稍后重试'), 'error')
   }
 }
 
@@ -123,28 +129,33 @@ const scanLibrary = async (id) => {
   try {
     const res = await axios.post(`${API_BASE}/media-library/scan/${id}`)
     if (res.data?.code === 200) {
-      alert('扫描已触发')
+      showAppMessage('扫描已触发', 'success')
       await fetchLibraries()
     }
   } catch (error) {
-    alert('扫描失败：' + (error.response?.data?.msg || '请稍后重试'))
+    showAppMessage('扫描失败：' + (error.response?.data?.msg || '请稍后重试'), 'error')
   } finally {
     scanning.value = false
   }
 }
 
 const scanAll = async () => {
-  if (!confirm('确定要扫描所有媒体库吗？')) return
+  const confirmed = await askAppConfirm({
+    title: '扫描所有媒体库',
+    message: '确定要扫描所有媒体库吗？',
+    color: 'warning'
+  })
+  if (!confirmed) return
 
   scanning.value = true
   try {
     const res = await axios.post(`${API_BASE}/media-library/scan-all`)
     if (res.data?.code === 200) {
-      alert('扫描已触发')
+      showAppMessage('扫描已触发', 'success')
       await fetchLibraries()
     }
   } catch (error) {
-    alert('扫描失败：' + (error.response?.data?.msg || '请稍后重试'))
+    showAppMessage('扫描失败：' + (error.response?.data?.msg || '请稍后重试'), 'error')
   } finally {
     scanning.value = false
   }

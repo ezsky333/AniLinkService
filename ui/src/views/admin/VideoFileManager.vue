@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import { askAppConfirm, showAppMessage } from '../../utils/ui-feedback'
 
 const API_BASE = '/api'
 
@@ -8,8 +9,6 @@ const mediaFiles = ref([])
 const loading = ref(false)
 const detailDialog = ref(false)
 const editDialog = ref(false)
-const errorMessage = ref('')
-const successMessage = ref('')
 const selectedLibraryId = ref(null)
 const mediaLibraries = ref([])
 const queueStatus = ref(null)
@@ -70,7 +69,6 @@ const fetchMediaFiles = async (pageNum = 1) => {
     }
   } catch (error) {
     console.error('获取媒体文件失败:', error)
-    errorMessage.value = '获取文件列表失败'
   } finally {
     loading.value = false
   }
@@ -114,14 +112,15 @@ const saveEdit = async () => {
   try {
     const res = await axios.put(`${API_BASE}/media-files/${selectedFile.value.id}`, editingFile.value)
     if (res.data?.code === 200) {
-      successMessage.value = '更新成功'
+      showAppMessage('更新成功', 'success')
       editDialog.value = false
       pagination.value.page = 1
       await fetchMediaFiles(1)
-      setTimeout(() => { successMessage.value = '' }, 3000)
+    } else {
+      showAppMessage(res.data?.msg || '更新失败', 'error')
     }
   } catch (error) {
-    errorMessage.value = '更新失败: ' + (error.response?.data?.msg || error.message)
+    showAppMessage('更新失败: ' + (error.response?.data?.msg || error.message), 'error')
   } finally {
     loading.value = false
   }
@@ -129,7 +128,12 @@ const saveEdit = async () => {
 
 // 删除文件
 const deleteFile = async (fileId, deletePhysicalFile = false) => {
-  if (!confirm(`确定要删除此文件${deletePhysicalFile ? '及其物理文件' : ''}吗？`)) {
+  const confirmed = await askAppConfirm({
+    title: '删除文件',
+    message: `确定要删除此文件${deletePhysicalFile ? '及其物理文件' : ''}吗？`,
+    color: 'error'
+  })
+  if (!confirmed) {
     return
   }
 
@@ -139,13 +143,14 @@ const deleteFile = async (fileId, deletePhysicalFile = false) => {
       params: { deleteFile: deletePhysicalFile }
     })
     if (res.data?.code === 200) {
-      successMessage.value = '删除成功'
+      showAppMessage('删除成功', 'success')
       pagination.value.page = 1
       await fetchMediaFiles(1)
-      setTimeout(() => { successMessage.value = '' }, 3000)
+    } else {
+      showAppMessage(res.data?.msg || '删除失败', 'error')
     }
   } catch (error) {
-    errorMessage.value = '删除失败: ' + (error.response?.data?.msg || error.message)
+    showAppMessage('删除失败: ' + (error.response?.data?.msg || error.message), 'error')
   } finally {
     loading.value = false
   }
@@ -154,11 +159,16 @@ const deleteFile = async (fileId, deletePhysicalFile = false) => {
 // 批量重新获取元数据
 const reprocessMetadata = async (libraryId) => {
   if (!libraryId) {
-    errorMessage.value = '请先选择媒体库'
+    showAppMessage('请先选择媒体库', 'warning')
     return
   }
 
-  if (!confirm('确定要重新获取此媒体库中所有文件的元数据吗？')) {
+  const confirmed = await askAppConfirm({
+    title: '重新获取元数据',
+    message: '确定要重新获取此媒体库中所有文件的元数据吗？',
+    color: 'warning'
+  })
+  if (!confirmed) {
     return
   }
 
@@ -166,15 +176,17 @@ const reprocessMetadata = async (libraryId) => {
   try {
     const res = await axios.post(`${API_BASE}/media-files/reprocess-metadata/${libraryId}`)
     if (res.data?.code === 200) {
-      successMessage.value = '已提交重新获取任务'
+      showAppMessage('已提交重新获取任务', 'success')
       // 5秒后刷新队列状态和文件列表
       setTimeout(() => {
         fetchQueueStatus()
         fetchMediaFiles(1)
       }, 5000)
+    } else {
+      showAppMessage(res.data?.msg || '提交任务失败', 'error')
     }
   } catch (error) {
-    errorMessage.value = '提交任务失败: ' + (error.response?.data?.msg || error.message)
+    showAppMessage('提交任务失败: ' + (error.response?.data?.msg || error.message), 'error')
   } finally {
     reprocessingLibraryId.value = null
   }
@@ -243,14 +255,6 @@ onMounted(() => {
 
 <template>
   <div>
-    <!-- 警告和成功提示 -->
-    <v-alert v-if="errorMessage" type="error" class="mb-4" closable @update:model-value="v => { if (!v) errorMessage = '' }">
-      {{ errorMessage }}
-    </v-alert>
-    <v-alert v-if="successMessage" type="success" class="mb-4" closable @update:model-value="v => { if (!v) successMessage = '' }">
-      {{ successMessage }}
-    </v-alert>
-
     <!-- 操作工具栏 -->
     <v-card class="mb-4">
       <v-card-text class="pa-4">

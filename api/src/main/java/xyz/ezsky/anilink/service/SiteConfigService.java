@@ -34,6 +34,20 @@ public class SiteConfigService {
     private static final String INSTALLED = "installed";
     private static final String DANDAN_APP_ID = "dandan_app_id";
     private static final String DANDAN_APP_SECRET = "dandan_app_secret";
+    private static final String AUTH_REGISTER_ENABLED = "auth_register_enabled";
+    private static final String SMTP_HOST = "smtp_host";
+    private static final String SMTP_PORT = "smtp_port";
+    private static final String SMTP_USERNAME = "smtp_username";
+    private static final String SMTP_PASSWORD = "smtp_password";
+    private static final String SMTP_FROM_EMAIL = "smtp_from_email";
+    private static final String SMTP_FROM_NAME = "smtp_from_name";
+    private static final String SMTP_SSL_ENABLED = "smtp_ssl_enabled";
+    private static final String SMTP_STARTTLS_ENABLED = "smtp_starttls_enabled";
+    private static final String MAIL_CODE_EXPIRE_SECONDS = "mail_code_expire_seconds";
+    private static final String MAIL_SEND_COOLDOWN_SECONDS = "mail_send_cooldown_seconds";
+    private static final String MAIL_SEND_DAILY_LIMIT_PER_IP = "mail_send_daily_limit_per_ip";
+    private static final String MAIL_SEND_DAILY_LIMIT_PER_EMAIL = "mail_send_daily_limit_per_email";
+    private static final String REGISTER_DAILY_LIMIT_PER_IP = "register_daily_limit_per_ip";
 
     // 简单内存缓存，避免每次请求都访问数据库
     private volatile String cachedDandanAppId;
@@ -66,6 +80,17 @@ public class SiteConfigService {
             .ifPresent(config -> vo.setDandanAppId(config.getConfigValue()));
         siteConfigRepository.findByConfigKey(DANDAN_APP_SECRET)
             .ifPresent(config -> vo.setDandanAppSecret(config.getConfigValue()));
+
+        vo.setAuthRegisterEnabled(isRegisterEnabled());
+        vo.setSmtpHost(getConfigValue(SMTP_HOST));
+        vo.setSmtpPort(parseInt(getConfigValue(SMTP_PORT), null));
+        vo.setSmtpUsername(getConfigValue(SMTP_USERNAME));
+        vo.setSmtpFromEmail(getConfigValue(SMTP_FROM_EMAIL));
+        vo.setSmtpFromName(getConfigValue(SMTP_FROM_NAME));
+        vo.setSmtpSslEnabled(getBooleanConfig(SMTP_SSL_ENABLED, true));
+        vo.setSmtpStarttlsEnabled(getBooleanConfig(SMTP_STARTTLS_ENABLED, false));
+        String smtpPassword = getConfigValue(SMTP_PASSWORD);
+        vo.setSmtpPasswordConfigured(smtpPassword != null && !smtpPassword.isBlank());
         
         return vo;
     }
@@ -98,6 +123,43 @@ public class SiteConfigService {
             saveOrUpdateConfig(DANDAN_APP_SECRET, request.getDandanAppSecret(), "Dandan 应用密钥");
             cachedDandanAppSecret = request.getDandanAppSecret();
         }
+
+        saveOrUpdateConfig(
+            AUTH_REGISTER_ENABLED,
+            String.valueOf(Boolean.TRUE.equals(request.getAuthRegisterEnabled())),
+            "是否开放注册"
+        );
+
+        if (request.getSmtpHost() != null) {
+            saveOrUpdateConfig(SMTP_HOST, request.getSmtpHost(), "SMTP 主机");
+        }
+        if (request.getSmtpPort() != null) {
+            saveOrUpdateConfig(SMTP_PORT, String.valueOf(request.getSmtpPort()), "SMTP 端口");
+        }
+        if (request.getSmtpUsername() != null) {
+            saveOrUpdateConfig(SMTP_USERNAME, request.getSmtpUsername(), "SMTP 用户名");
+        }
+        if (request.getSmtpPassword() != null && !request.getSmtpPassword().isBlank()) {
+            saveOrUpdateConfig(SMTP_PASSWORD, request.getSmtpPassword(), "SMTP 密码");
+        }
+        if (request.getSmtpFromEmail() != null) {
+            saveOrUpdateConfig(SMTP_FROM_EMAIL, request.getSmtpFromEmail(), "SMTP 发件邮箱");
+        }
+        if (request.getSmtpFromName() != null) {
+            saveOrUpdateConfig(SMTP_FROM_NAME, request.getSmtpFromName(), "SMTP 发件人");
+        }
+        if (request.getSmtpSslEnabled() != null) {
+            saveOrUpdateConfig(SMTP_SSL_ENABLED, String.valueOf(request.getSmtpSslEnabled()), "SMTP SSL 开关");
+        }
+        if (request.getSmtpStarttlsEnabled() != null) {
+            saveOrUpdateConfig(SMTP_STARTTLS_ENABLED, String.valueOf(request.getSmtpStarttlsEnabled()), "SMTP STARTTLS 开关");
+        }
+
+        saveOrUpdateConfig(MAIL_CODE_EXPIRE_SECONDS, "300", "邮箱验证码过期秒数");
+        saveOrUpdateConfig(MAIL_SEND_COOLDOWN_SECONDS, "60", "邮箱验证码发送冷却秒数");
+        saveOrUpdateConfig(MAIL_SEND_DAILY_LIMIT_PER_IP, "30", "单 IP 每日邮箱验证码发送上限");
+        saveOrUpdateConfig(MAIL_SEND_DAILY_LIMIT_PER_EMAIL, "10", "单邮箱每日验证码发送上限");
+        saveOrUpdateConfig(REGISTER_DAILY_LIMIT_PER_IP, "20", "单 IP 每日注册上限");
     }
     
     /**
@@ -121,6 +183,98 @@ public class SiteConfigService {
             saveOrUpdateConfig(DANDAN_APP_SECRET, request.getDandanAppSecret(), "Dandan 应用密钥");
             cachedDandanAppSecret = request.getDandanAppSecret();
         }
+        if (request.getAuthRegisterEnabled() != null) {
+            saveOrUpdateConfig(AUTH_REGISTER_ENABLED, String.valueOf(request.getAuthRegisterEnabled()), "是否开放注册");
+        }
+        if (request.getSmtpHost() != null) {
+            saveOrUpdateConfig(SMTP_HOST, request.getSmtpHost(), "SMTP 主机");
+        }
+        if (request.getSmtpPort() != null) {
+            saveOrUpdateConfig(SMTP_PORT, String.valueOf(request.getSmtpPort()), "SMTP 端口");
+        }
+        if (request.getSmtpUsername() != null) {
+            saveOrUpdateConfig(SMTP_USERNAME, request.getSmtpUsername(), "SMTP 用户名");
+        }
+        if (request.getSmtpPassword() != null && !request.getSmtpPassword().isBlank()) {
+            saveOrUpdateConfig(SMTP_PASSWORD, request.getSmtpPassword(), "SMTP 密码");
+        }
+        if (request.getSmtpFromEmail() != null) {
+            saveOrUpdateConfig(SMTP_FROM_EMAIL, request.getSmtpFromEmail(), "SMTP 发件邮箱");
+        }
+        if (request.getSmtpFromName() != null) {
+            saveOrUpdateConfig(SMTP_FROM_NAME, request.getSmtpFromName(), "SMTP 发件人");
+        }
+        if (request.getSmtpSslEnabled() != null) {
+            saveOrUpdateConfig(SMTP_SSL_ENABLED, String.valueOf(request.getSmtpSslEnabled()), "SMTP SSL 开关");
+        }
+        if (request.getSmtpStarttlsEnabled() != null) {
+            saveOrUpdateConfig(SMTP_STARTTLS_ENABLED, String.valueOf(request.getSmtpStarttlsEnabled()), "SMTP STARTTLS 开关");
+        }
+    }
+
+    public boolean isRegisterEnabled() {
+        return getBooleanConfig(AUTH_REGISTER_ENABLED, false);
+    }
+
+    public int getMailCodeExpireSeconds() {
+        return getIntConfig(MAIL_CODE_EXPIRE_SECONDS, 300);
+    }
+
+    public int getMailSendCooldownSeconds() {
+        return getIntConfig(MAIL_SEND_COOLDOWN_SECONDS, 60);
+    }
+
+    public int getMailSendDailyLimitPerIp() {
+        return getIntConfig(MAIL_SEND_DAILY_LIMIT_PER_IP, 30);
+    }
+
+    public int getMailSendDailyLimitPerEmail() {
+        return getIntConfig(MAIL_SEND_DAILY_LIMIT_PER_EMAIL, 10);
+    }
+
+    public int getRegisterDailyLimitPerIp() {
+        return getIntConfig(REGISTER_DAILY_LIMIT_PER_IP, 20);
+    }
+
+    public SmtpSettings getSmtpSettings() {
+        String host = getConfigValue(SMTP_HOST);
+        Integer port = parseInt(getConfigValue(SMTP_PORT), null);
+        String username = getConfigValue(SMTP_USERNAME);
+        String password = getConfigValue(SMTP_PASSWORD);
+        String fromEmail = getConfigValue(SMTP_FROM_EMAIL);
+        String fromName = getConfigValue(SMTP_FROM_NAME);
+        boolean sslEnabled = getBooleanConfig(SMTP_SSL_ENABLED, true);
+        boolean starttlsEnabled = getBooleanConfig(SMTP_STARTTLS_ENABLED, false);
+        return new SmtpSettings(host, port, username, password, fromEmail, fromName, sslEnabled, starttlsEnabled);
+    }
+
+    private boolean getBooleanConfig(String key, boolean defaultValue) {
+        String value = getConfigValue(key);
+        if (value == null || value.isBlank()) {
+            return defaultValue;
+        }
+        return Boolean.parseBoolean(value);
+    }
+
+    private int getIntConfig(String key, int defaultValue) {
+        return parseInt(getConfigValue(key), defaultValue);
+    }
+
+    private Integer parseInt(String value, Integer defaultValue) {
+        if (value == null || value.isBlank()) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
+
+    private String getConfigValue(String key) {
+        return siteConfigRepository.findByConfigKey(key)
+            .map(SiteConfig::getConfigValue)
+            .orElse(null);
     }
     
     /**
@@ -182,5 +336,76 @@ public class SiteConfigService {
     public boolean isInstalled() {
         Optional<SiteConfig> config = siteConfigRepository.findByConfigKey(INSTALLED);
         return config.isPresent() && "true".equals(config.get().getConfigValue());
+    }
+
+    public static class SmtpSettings {
+        private final String host;
+        private final Integer port;
+        private final String username;
+        private final String password;
+        private final String fromEmail;
+        private final String fromName;
+        private final Boolean sslEnabled;
+        private final Boolean starttlsEnabled;
+
+        public SmtpSettings(
+                String host,
+                Integer port,
+                String username,
+                String password,
+                String fromEmail,
+                String fromName,
+                Boolean sslEnabled,
+                Boolean starttlsEnabled
+        ) {
+            this.host = host;
+            this.port = port;
+            this.username = username;
+            this.password = password;
+            this.fromEmail = fromEmail;
+            this.fromName = fromName;
+            this.sslEnabled = sslEnabled;
+            this.starttlsEnabled = starttlsEnabled;
+        }
+
+        public String getHost() {
+            return host;
+        }
+
+        public Integer getPort() {
+            return port;
+        }
+
+        public String getUsername() {
+            return username;
+        }
+
+        public String getPassword() {
+            return password;
+        }
+
+        public String getFromEmail() {
+            return fromEmail;
+        }
+
+        public String getFromName() {
+            return fromName;
+        }
+
+        public Boolean getSslEnabled() {
+            return sslEnabled;
+        }
+
+        public Boolean getStarttlsEnabled() {
+            return starttlsEnabled;
+        }
+
+        public boolean isConfigured() {
+            return host != null && !host.isBlank()
+                    && port != null
+                    && username != null && !username.isBlank()
+                    && password != null && !password.isBlank()
+                    && fromEmail != null && !fromEmail.isBlank();
+        }
     }
 }

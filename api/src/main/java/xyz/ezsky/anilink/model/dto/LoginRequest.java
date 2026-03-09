@@ -14,9 +14,19 @@ import lombok.NoArgsConstructor;
 @Schema(description = "登录请求")
 public class LoginRequest {
     
+    @Schema(description = "登录账号（用户名或邮箱）", example = "admin")
+    private String account;
+
     @Schema(description = "用户名", example = "admin")
     private String username;
     
     @Schema(description = "密码", example = "123456")
     private String password;
+
+    public String getAccountOrUsername() {
+        if (account != null && !account.isBlank()) {
+            return account;
+        }
+        return username;
+    }
 }

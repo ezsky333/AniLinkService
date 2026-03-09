@@ -6,9 +6,11 @@ import org.springframework.web.bind.annotation.*;
 import cn.dev33.satoken.annotation.SaCheckRole;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import xyz.ezsky.anilink.model.dto.TestEmailRequest;
 import xyz.ezsky.anilink.model.dto.UpdateSiteConfigRequest;
 import xyz.ezsky.anilink.model.vo.SiteConfigVO;
 import xyz.ezsky.anilink.model.vo.ApiResponseVO;
+import xyz.ezsky.anilink.service.EmailService;
 import xyz.ezsky.anilink.service.SiteConfigService;
 
 /**
@@ -21,6 +23,9 @@ public class SiteConfigController {
     
     @Autowired
     private SiteConfigService siteConfigService;
+
+    @Autowired
+    private EmailService emailService;
     
     /**
      * 获取站点配置信息
@@ -41,5 +46,19 @@ public class SiteConfigController {
     public ApiResponseVO<String> updateSiteConfig(@RequestBody UpdateSiteConfigRequest request) {
         siteConfigService.updateSiteConfig(request);
         return ApiResponseVO.success("更新成功", "站点配置已更新");
+    }
+
+    /**
+     * 测试 SMTP 邮件发送
+     */
+    @PostMapping("test-email")
+    @SaCheckRole("super-admin")
+    @Operation(summary = "发送测试邮件", description = "使用当前 SMTP 配置发送测试邮件")
+    public ApiResponseVO<String> sendTestEmail(@RequestBody TestEmailRequest request) {
+        if (request.getToEmail() == null || request.getToEmail().isBlank()) {
+            return ApiResponseVO.fail(400, "请填写收件邮箱");
+        }
+        emailService.sendTestEmail(request.getToEmail());
+        return ApiResponseVO.success("ok", "测试邮件发送成功");
     }
 }
