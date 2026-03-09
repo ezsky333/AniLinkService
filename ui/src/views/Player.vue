@@ -936,9 +936,10 @@ const createPlayerInstance = async () => {
       screenshot: !mobile,
       setting: true,
       loop: false,
-      flip: !mobile,
-      playbackRate: !mobile,
-      aspectRatio: !mobile,
+      // 保留移动端设置菜单中的功能项（镜像、倍速、画面比例）
+      flip: true,
+      playbackRate: true,
+      aspectRatio: true,
       fullscreen: true,
       fullscreenWeb: !mobile,
       miniProgressBar: true,

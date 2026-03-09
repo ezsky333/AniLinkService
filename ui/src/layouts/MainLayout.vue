@@ -100,10 +100,6 @@
             class="login-input"
             @keyup.enter="handleLogin"
           />
-          <label class="remember-me">
-            <input v-model="loginForm.rememberMe" type="checkbox" />
-            <span>记住我</span>
-          </label>
         </div>
 
         <div class="login-footer">
@@ -118,11 +114,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 
 const API_BASE = '/api'
+const DEFAULT_SITE_NAME = 'AniLink'
 const router = useRouter()
 const searchQuery = ref('')
 const showLoginDialog = ref(false)
@@ -133,8 +130,7 @@ const userInfo = ref(null)
 
 const loginForm = ref({
   username: '',
-  password: '',
-  rememberMe: false
+  password: ''
 })
 
 // 配置axios请求拦截器，自动添加token
@@ -196,6 +192,21 @@ const isAdmin = computed(() => {
   if (!userInfo.value || !userInfo.value.roleCodeList) return false
   return userInfo.value.roleCodeList.includes('super-admin')
 })
+
+const syncDocumentTitle = () => {
+  if (typeof document === 'undefined') {
+    return
+  }
+  document.title = siteConfig.value?.siteName || DEFAULT_SITE_NAME
+}
+
+watch(
+  () => siteConfig.value?.siteName,
+  () => {
+    syncDocumentTitle()
+  },
+  { immediate: true }
+)
 
 onMounted(() => {
   loadSiteConfig()
@@ -869,7 +880,12 @@ body {
   }
 
   .site-name {
-    display: none;
+    display: inline-block;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.86rem;
   }
 
   .search-box {
