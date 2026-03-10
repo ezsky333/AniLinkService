@@ -22,7 +22,7 @@
         <div class="nav-right">
           <!-- 消息按钮和下拉 -->
           <div v-if="isLoggedIn" class="message-wrapper">
-            <button @click="toggleMessageMenu" class="message-btn" :title="`消息${unreadCount > 0 ? ' (' + unreadCount + ')' : ''}`">
+            <button @click="handleMessageBtnClick" class="message-btn" :title="`消息${unreadCount > 0 ? ' (' + unreadCount + ')' : ''}`">
               <i class="mdi mdi-bell"></i>
               <span v-if="unreadCount > 0" class="unread-dot"></span>
             </button>
@@ -401,6 +401,22 @@ const handleMessageClick = async (message) => {
   } else if (message.animeId) {
     // 否则如果有animeId，跳转到动画详情页
     router.push(`/anime/${message.animeId}`)
+  }
+}
+
+// 判断是否是移动端
+const isMobileDevice = () => {
+  return window.innerWidth <= 768
+}
+
+// 处理消息按钮点击
+const handleMessageBtnClick = () => {
+  if (isMobileDevice()) {
+    // 移动端直接跳转到消息列表
+    goToMessages()
+  } else {
+    // PC端打开下拉菜单
+    toggleMessageMenu()
   }
 }
 
@@ -1544,7 +1560,11 @@ body {
   }
 
   .search-box {
-    width: 140px;
+    width: 180px;
+  }
+
+  .message-dropdown {
+    width: 340px;
   }
 }
 
@@ -1561,6 +1581,7 @@ body {
   .nav-right {
     margin-left: auto;
     justify-content: flex-end;
+    gap: 10px;
   }
 
   .nav-menu {
@@ -1568,23 +1589,38 @@ body {
   }
 
   .search-box {
-    width: 110px;
+    width: 140px;
     font-size: 0.85rem;
     padding: 6px 10px;
+    order: 1;
   }
 
   .search-box input::placeholder {
     font-size: 0.8rem;
   }
 
+  .message-wrapper {
+    order: 2;
+  }
+
+  .user-menu-wrapper {
+    order: 3;
+  }
+
   .content-wrapper {
     padding: 16px 12px;
   }
 
+  .message-btn,
   .user-btn {
     width: 36px;
     height: 36px;
-    font-size: 0.85rem;
+    font-size: 1rem;
+  }
+
+  .message-dropdown {
+    width: 320px;
+    right: -10px;
   }
 }
 
@@ -1618,17 +1654,31 @@ body {
 
   .search-box {
     display: flex;
-    width: 96px;
-    padding: 6px 9px;
-    gap: 6px;
+    width: 120px;
+    padding: 6px 8px;
+    gap: 4px;
+    order: 1;
+  }
+
+  .search-box i {
+    font-size: 0.85rem;
   }
 
   .search-box input {
     font-size: 0.8rem;
+    min-width: 0;
   }
 
   .search-box input::placeholder {
     font-size: 0.75rem;
+  }
+
+  .message-wrapper {
+    order: 2;
+  }
+
+  .user-menu-wrapper {
+    order: 3;
   }
 
   .nav-menu {
@@ -1650,10 +1700,69 @@ body {
     padding: 12px 10px;
   }
 
+  .message-btn,
   .user-btn {
     width: 32px;
     height: 32px;
+    font-size: 0.9rem;
+  }
+
+  .message-dropdown {
+    width: calc(100vw - 20px);
+    max-width: 320px;
+    right: -10px;
+  }
+}
+
+/* 极小屏幕优化 */
+@media (max-width: 480px) {
+  .nav-container {
+    padding: 6px 8px;
+    gap: 6px;
+  }
+
+  .site-name {
+    max-width: 100px;
     font-size: 0.8rem;
+  }
+
+  .search-box {
+    width: 100px;
+    padding: 5px 7px;
+    order: 1;
+  }
+
+  .search-box input::placeholder {
+    content: '搜索';
+  }
+
+  .message-wrapper {
+    order: 2;
+  }
+
+  .user-menu-wrapper {
+    order: 3;
+  }
+
+  .nav-right {
+    gap: 6px;
+  }
+
+  .message-btn,
+  .user-btn {
+    width: 30px;
+    height: 30px;
+    font-size: 0.85rem;
+  }
+
+  .unread-dot {
+    width: 8px;
+    height: 8px;
+  }
+
+  .message-dropdown {
+    width: calc(100vw - 16px);
+    right: -8px;
   }
 }
 </style>
