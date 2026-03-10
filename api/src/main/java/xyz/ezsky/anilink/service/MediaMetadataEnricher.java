@@ -29,6 +29,9 @@ public class MediaMetadataEnricher {
     @Autowired
     private MediaSubtitleService mediaSubtitleService;
 
+    @Autowired
+    private MediaThumbnailService mediaThumbnailService;
+
     /**
      * 异步提取并补充媒体文件的完整元数据
      * 
@@ -70,7 +73,10 @@ public class MediaMetadataEnricher {
             // 第三步：扫描外部字幕文件
             mediaSubtitleService.scanExternalSubtitles(mediaFile);
 
-            // 第四步：标记已获取元数据
+            // 第四步：生成视频缩略图
+            mediaThumbnailService.generateThumbnail(mediaFile);
+
+            // 第五步：标记已获取元数据
             mediaFile.setMetadataFetched(true);
 
             long duration = System.currentTimeMillis() - startTime;
