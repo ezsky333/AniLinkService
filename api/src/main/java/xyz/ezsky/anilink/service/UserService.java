@@ -25,6 +25,7 @@ import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -95,6 +96,7 @@ public class UserService {
         user.setUsername(username);
         user.setEmail(email);
         user.setIsActive(true);
+        user.setRemoteAccessToken(generateUniqueRemoteAccessToken());
         // 密码使用MD5加密存储
         user.setPasswordHash(encodePassword(password));
         
@@ -167,6 +169,26 @@ public class UserService {
      */
     public String encodePassword(String password) {
         return SecureUtil.md5(password);
+    }
+
+    @Transactional
+    public String getOrCreateRemoteAccessToken(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("用户不存在"));
+        if (user.getRemoteAccessToken() == null || user.getRemoteAccessToken().isBlank()) {
+            user.setRemoteAccessToken(generateUniqueRemoteAccessToken());
+            userRepository.save(user);
+        }
+        return user.getRemoteAccessToken();
+    }
+
+    @Transactional
+    public String regenerateRemoteAccessToken(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("用户不存在"));
+        user.setRemoteAccessToken(generateUniqueRemoteAccessToken());
+        userRepository.save(user);
+        return user.getRemoteAccessToken();
     }
 
     /**
@@ -342,6 +364,17 @@ public class UserService {
                 user.getCreatedAt(),
                 user.getUpdatedAt()
         );
+    }
+
+    private String generateUniqueRemoteAccessToken() {
+        for (int i = 0; i < 10; i++) {
+            String candidate = UUID.randomUUID().toString().replace("-", "")
+                    + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+            if (userRepository.findByRemoteAccessToken(candidate).isEmpty()) {
+                return candidate;
+            }
+        }
+        throw new RuntimeException("生成远程访问密钥失败，请重试");
     }
 }
 

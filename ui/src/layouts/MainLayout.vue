@@ -15,6 +15,7 @@
         <nav class="nav-menu">
           <router-link to="/" class="nav-item" exact-active-class="active">首页</router-link>
           <router-link to="/search" class="nav-item" active-class="active">发现</router-link>
+          <router-link v-if="isRemoteAccessVisible" to="/remote-access" class="nav-item" active-class="active">远程访问</router-link>
           <router-link v-if="isLoggedIn" to="/follows" class="nav-item" active-class="active">我的追番</router-link>
         </nav>
 
@@ -486,6 +487,45 @@ const isLoggedIn = computed(() => {
 
 const isRegisterOpen = computed(() => {
   return !!siteConfig.value?.authRegisterEnabled
+})
+
+const isRemoteAccessVisible = computed(() => {
+  const enabledRaw = siteConfig.value?.remoteAccessEnabled
+  const tokenRequiredRaw = siteConfig.value?.remoteAccessTokenRequired
+  const requiredRoleRaw = siteConfig.value?.remoteAccessRequiredRole
+  const enabled = enabledRaw === true || enabledRaw === 'true'
+  const tokenRequired = tokenRequiredRaw === true || tokenRequiredRaw === 'true'
+
+  if (!enabled) {
+    return false
+  }
+
+  if (!tokenRequired) {
+    return true
+  }
+
+  if (!isLoggedIn.value) {
+    return false
+  }
+
+  const roleLevel = {
+    user: 1,
+    admin: 2,
+    'super-admin': 3
+  }
+
+  const requiredRole = (requiredRoleRaw || 'user').toString().trim()
+  const requiredLevel = roleLevel[requiredRole]
+  const roleCodes = Array.isArray(userInfo.value?.roleCodeList) ? userInfo.value.roleCodeList : []
+
+  if (!requiredLevel) {
+    return roleCodes.includes(requiredRole)
+  }
+
+  return roleCodes.some((role) => {
+    const level = roleLevel[role]
+    return typeof level === 'number' && level >= requiredLevel
+  })
 })
 
 const sendCodeDisabled = computed(() => {
@@ -1179,6 +1219,7 @@ body {
   margin-bottom: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-clamp: 2;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;

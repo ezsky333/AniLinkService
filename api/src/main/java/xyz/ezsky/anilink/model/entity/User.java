@@ -29,6 +29,9 @@ public class User {
     
     @Column(unique = true, length = 100)
     private String email;
+
+    @Column(name = "remote_access_token", unique = true, length = 128)
+    private String remoteAccessToken;
     
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;

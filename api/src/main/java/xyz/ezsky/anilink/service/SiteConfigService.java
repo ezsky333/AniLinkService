@@ -35,6 +35,9 @@ public class SiteConfigService {
     private static final String DANDAN_APP_ID = "dandan_app_id";
     private static final String DANDAN_APP_SECRET = "dandan_app_secret";
     private static final String AUTH_REGISTER_ENABLED = "auth_register_enabled";
+    private static final String REMOTE_ACCESS_ENABLED = "remote_access_enabled";
+    private static final String REMOTE_ACCESS_TOKEN_REQUIRED = "remote_access_token_required";
+    private static final String REMOTE_ACCESS_REQUIRED_ROLE = "remote_access_required_role";
     private static final String SMTP_HOST = "smtp_host";
     private static final String SMTP_PORT = "smtp_port";
     private static final String SMTP_USERNAME = "smtp_username";
@@ -82,6 +85,9 @@ public class SiteConfigService {
             .ifPresent(config -> vo.setDandanAppSecret(config.getConfigValue()));
 
         vo.setAuthRegisterEnabled(isRegisterEnabled());
+        vo.setRemoteAccessEnabled(isRemoteAccessEnabled());
+        vo.setRemoteAccessTokenRequired(isRemoteAccessTokenRequired());
+        vo.setRemoteAccessRequiredRole(getRemoteAccessRequiredRole());
         vo.setSmtpHost(getConfigValue(SMTP_HOST));
         vo.setSmtpPort(parseInt(getConfigValue(SMTP_PORT), null));
         vo.setSmtpUsername(getConfigValue(SMTP_USERNAME));
@@ -128,6 +134,22 @@ public class SiteConfigService {
             AUTH_REGISTER_ENABLED,
             String.valueOf(Boolean.TRUE.equals(request.getAuthRegisterEnabled())),
             "是否开放注册"
+        );
+
+        saveOrUpdateConfig(
+            REMOTE_ACCESS_ENABLED,
+            String.valueOf(Boolean.TRUE.equals(request.getRemoteAccessEnabled())),
+            "是否开启 API v1 远程访问"
+        );
+        saveOrUpdateConfig(
+            REMOTE_ACCESS_TOKEN_REQUIRED,
+            String.valueOf(Boolean.TRUE.equals(request.getRemoteAccessTokenRequired())),
+            "API v1 远程访问是否需要授权"
+        );
+        saveOrUpdateConfig(
+            REMOTE_ACCESS_REQUIRED_ROLE,
+            normalizeRemoteAccessRole(request.getRemoteAccessRequiredRole()),
+            "API v1 授权所需角色代码"
         );
 
         if (request.getSmtpHost() != null) {
@@ -186,6 +208,15 @@ public class SiteConfigService {
         if (request.getAuthRegisterEnabled() != null) {
             saveOrUpdateConfig(AUTH_REGISTER_ENABLED, String.valueOf(request.getAuthRegisterEnabled()), "是否开放注册");
         }
+        if (request.getRemoteAccessEnabled() != null) {
+            saveOrUpdateConfig(REMOTE_ACCESS_ENABLED, String.valueOf(request.getRemoteAccessEnabled()), "是否开启 API v1 远程访问");
+        }
+        if (request.getRemoteAccessTokenRequired() != null) {
+            saveOrUpdateConfig(REMOTE_ACCESS_TOKEN_REQUIRED, String.valueOf(request.getRemoteAccessTokenRequired()), "API v1 远程访问是否需要授权");
+        }
+        if (request.getRemoteAccessRequiredRole() != null) {
+            saveOrUpdateConfig(REMOTE_ACCESS_REQUIRED_ROLE, normalizeRemoteAccessRole(request.getRemoteAccessRequiredRole()), "API v1 授权所需角色代码");
+        }
         if (request.getSmtpHost() != null) {
             saveOrUpdateConfig(SMTP_HOST, request.getSmtpHost(), "SMTP 主机");
         }
@@ -214,6 +245,18 @@ public class SiteConfigService {
 
     public boolean isRegisterEnabled() {
         return getBooleanConfig(AUTH_REGISTER_ENABLED, false);
+    }
+
+    public boolean isRemoteAccessEnabled() {
+        return getBooleanConfig(REMOTE_ACCESS_ENABLED, false);
+    }
+
+    public boolean isRemoteAccessTokenRequired() {
+        return getBooleanConfig(REMOTE_ACCESS_TOKEN_REQUIRED, false);
+    }
+
+    public String getRemoteAccessRequiredRole() {
+        return normalizeRemoteAccessRole(getConfigValue(REMOTE_ACCESS_REQUIRED_ROLE));
     }
 
     public int getMailCodeExpireSeconds() {
@@ -275,6 +318,13 @@ public class SiteConfigService {
         return siteConfigRepository.findByConfigKey(key)
             .map(SiteConfig::getConfigValue)
             .orElse(null);
+    }
+
+    private String normalizeRemoteAccessRole(String roleCode) {
+        if (roleCode == null || roleCode.isBlank()) {
+            return "user";
+        }
+        return roleCode.trim();
     }
     
     /**

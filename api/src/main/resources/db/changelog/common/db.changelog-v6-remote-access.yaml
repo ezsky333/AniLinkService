@@ -1,0 +1,30 @@
+databaseChangeLog:
+  - changeSet:
+      id: v6-add-users-remote-access-token
+      author: anilink
+      changes:
+        - addColumn:
+            tableName: users
+            columns:
+              - column:
+                  name: remote_access_token
+                  type: varchar(128)
+        - addUniqueConstraint:
+            tableName: users
+            columnNames: remote_access_token
+            constraintName: uk_users_remote_access_token
+
+  - changeSet:
+      id: v6-insert-remote-access-config
+      author: anilink
+      preConditions:
+        - onFail: MARK_RAN
+      changes:
+        - sql:
+            sql: |
+              INSERT INTO site_config (config_key, config_value, description, created_at, updated_at)
+              VALUES
+                ('remote_access_enabled', 'false', '是否开启 API v1 远程访问', NOW(), NOW()),
+                ('remote_access_token_required', 'false', 'API v1 远程访问是否需要授权', NOW(), NOW()),
+                ('remote_access_required_role', 'user', 'API v1 授权所需角色代码', NOW(), NOW())
+            dbms: h2,postgresql

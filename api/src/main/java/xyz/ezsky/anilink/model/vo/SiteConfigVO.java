@@ -35,6 +35,15 @@ public class SiteConfigVO {
     @Schema(description = "是否开放注册", example = "false")
     private Boolean authRegisterEnabled;
 
+    @Schema(description = "是否开启远程访问（API v1）", example = "true")
+    private Boolean remoteAccessEnabled;
+
+    @Schema(description = "远程访问是否需要授权", example = "true")
+    private Boolean remoteAccessTokenRequired;
+
+    @Schema(description = "远程访问授权所需角色代码", example = "user")
+    private String remoteAccessRequiredRole;
+
     @Schema(description = "SMTP 主机", example = "smtp.qq.com")
     private String smtpHost;
 

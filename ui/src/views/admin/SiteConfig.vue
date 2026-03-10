@@ -11,12 +11,16 @@ const activeTab = ref('basic')
 const showTestEmailDialog = ref(false)
 const testEmail = ref('')
 const sendingTestEmail = ref(false)
+const roleOptions = ref([])
 
 const form = ref({
   siteName: '',
   siteDescription: '',
   siteUrl: '',
   authRegisterEnabled: false,
+  remoteAccessEnabled: false,
+  remoteAccessTokenRequired: false,
+  remoteAccessRequiredRole: 'user',
   smtpHost: '',
   smtpPort: 465,
   smtpUsername: '',
@@ -32,6 +36,20 @@ form.value.dandanAppId = ''
 form.value.dandanAppSecret = ''
 form.value.smtpPasswordConfigured = false
 
+const fetchRoleOptions = async () => {
+  try {
+    const res = await axios.get(`${API_BASE}/users/roles`)
+    if (res.data?.code === 200 && Array.isArray(res.data.data)) {
+      roleOptions.value = res.data.data
+      return
+    }
+    roleOptions.value = []
+  } catch (error) {
+    console.error('获取角色列表失败:', error)
+    roleOptions.value = []
+  }
+}
+
 const fetchConfig = async () => {
   loading.value = true
   try {
@@ -44,6 +62,9 @@ const fetchConfig = async () => {
         dandanAppId: res.data.data.dandanAppId || '',
         dandanAppSecret: res.data.data.dandanAppSecret || '',
         authRegisterEnabled: !!res.data.data.authRegisterEnabled,
+        remoteAccessEnabled: !!res.data.data.remoteAccessEnabled,
+        remoteAccessTokenRequired: !!res.data.data.remoteAccessTokenRequired,
+        remoteAccessRequiredRole: res.data.data.remoteAccessRequiredRole || 'user',
         smtpHost: res.data.data.smtpHost || '',
         smtpPort: res.data.data.smtpPort || 465,
         smtpUsername: res.data.data.smtpUsername || '',
@@ -57,7 +78,7 @@ const fetchConfig = async () => {
     }
   } catch (error) {
     console.error('获取站点配置失败:', error)
-    errorMessage.value = '获取配置失败'
+    showAppMessage('获取配置失败', 'error')
   } finally {
     loading.value = false
   }
@@ -80,6 +101,9 @@ const saveConfig = async () => {
         dandanAppId: form.value.dandanAppId,
         dandanAppSecret: form.value.dandanAppSecret,
         authRegisterEnabled: form.value.authRegisterEnabled,
+        remoteAccessEnabled: form.value.remoteAccessEnabled,
+        remoteAccessTokenRequired: form.value.remoteAccessTokenRequired,
+        remoteAccessRequiredRole: form.value.remoteAccessRequiredRole,
         smtpHost: form.value.smtpHost,
         smtpPort: form.value.smtpPort,
         smtpUsername: form.value.smtpUsername,
@@ -92,6 +116,17 @@ const saveConfig = async () => {
 
     if (res.data?.code === 200) {
       showAppMessage('保存成功', 'success')
+      const localConfig = JSON.parse(localStorage.getItem('siteConfig') || '{}')
+      localStorage.setItem('siteConfig', JSON.stringify({
+        ...localConfig,
+        siteName: form.value.siteName,
+        siteDescription: form.value.siteDescription,
+        siteUrl: form.value.siteUrl,
+        authRegisterEnabled: form.value.authRegisterEnabled,
+        remoteAccessEnabled: form.value.remoteAccessEnabled,
+        remoteAccessTokenRequired: form.value.remoteAccessTokenRequired,
+        remoteAccessRequiredRole: form.value.remoteAccessRequiredRole
+      }))
     } else {
       showAppMessage(res.data?.msg || '保存失败', 'error')
     }
@@ -133,6 +168,7 @@ const sendTestEmail = async () => {
 }
 
 onMounted(() => {
+  fetchRoleOptions()
   fetchConfig()
 })
 </script>
@@ -157,6 +193,10 @@ onMounted(() => {
           <v-tab value="integration">
             <v-icon start>mdi-link-variant</v-icon>
             关联配置
+          </v-tab>
+          <v-tab value="remote-access">
+            <v-icon start>mdi-access-point-network</v-icon>
+            远程访问
           </v-tab>
         </v-tabs>
 
@@ -323,6 +363,43 @@ onMounted(() => {
                 prepend-inner-icon="mdi-lock"
                 variant="outlined"
                 color="primary"
+              />
+            </v-window-item>
+
+            <v-window-item value="remote-access">
+              <h3 class="text-h6 mb-4 text-primary font-weight-medium">
+                <v-icon start color="primary">mdi-access-point-network</v-icon>
+                API v1 远程访问配置
+              </h3>
+
+              <v-switch
+                v-model="form.remoteAccessEnabled"
+                label="开启远程访问（启用 API v1）"
+                color="primary"
+                inset
+                class="mb-4"
+              />
+
+              <v-switch
+                v-model="form.remoteAccessTokenRequired"
+                label="远程访问需要授权"
+                color="primary"
+                inset
+                class="mb-4"
+              />
+
+              <v-select
+                v-model="form.remoteAccessRequiredRole"
+                label="授权所需角色"
+                prepend-inner-icon="mdi-shield-account"
+                :items="roleOptions"
+                item-title="roleName"
+                item-value="roleCode"
+                variant="outlined"
+                color="primary"
+                hint="具备该角色（或 super-admin）的用户密钥可访问 API v1"
+                persistent-hint
+                :disabled="!form.remoteAccessTokenRequired"
               />
             </v-window-item>
           </v-window>

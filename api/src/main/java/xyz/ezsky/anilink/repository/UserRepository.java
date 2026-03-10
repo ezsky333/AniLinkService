@@ -28,6 +28,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
      * 根据用户名或邮箱查询用户
      */
     Optional<User> findByUsernameOrEmail(String username, String email);
+
+    /**
+     * 根据远程访问令牌查询用户
+     */
+    Optional<User> findByRemoteAccessToken(String remoteAccessToken);
     
     /**
      * 检查用户名是否存在
