@@ -20,6 +20,7 @@ import xyz.ezsky.anilink.model.entity.MediaSubtitle;
 import xyz.ezsky.anilink.model.vo.ApiResponseVO;
 import xyz.ezsky.anilink.model.vo.PageVO;
 import xyz.ezsky.anilink.model.dto.MediaSubtitleAdminDTO;
+import xyz.ezsky.anilink.model.dto.MediaSubtitleDTO;
 import xyz.ezsky.anilink.repository.MediaFileRepository;
 import xyz.ezsky.anilink.repository.MediaSubtitleRepository;
 import xyz.ezsky.anilink.service.MediaSubtitleService;
@@ -235,7 +236,7 @@ public class MediaSubtitleController {
     @Operation(summary = "设置字幕偏移量", description = "设置字幕的时间偏移量（毫秒）")
     @SaCheckRole("super-admin")
     @PutMapping("/{id}/offset")
-    public ApiResponseVO<MediaSubtitle> setSubtitleOffset(
+    public ApiResponseVO<MediaSubtitleDTO> setSubtitleOffset(
             @Parameter(description = "字幕ID") @PathVariable Long id,
             @Parameter(description = "时间偏移量（毫秒）") @RequestParam Long offset) {
         try {
@@ -247,7 +248,7 @@ public class MediaSubtitleController {
             MediaSubtitle subtitle = subtitleOpt.get();
             subtitle.setTimeOffset(offset);
             MediaSubtitle saved = mediaSubtitleRepository.save(subtitle);
-            return ApiResponseVO.success(saved);
+            return ApiResponseVO.success(toDTO(saved));
         } catch (Exception e) {
             return ApiResponseVO.fail("设置失败: " + e.getMessage());
         }
@@ -277,5 +278,27 @@ public class MediaSubtitleController {
     private String getFileExtension(String fileName) {
         int lastDotIndex = fileName.lastIndexOf('.');
         return lastDotIndex > 0 ? fileName.substring(lastDotIndex + 1).toLowerCase() : "";
+    }
+
+    private MediaSubtitleDTO toDTO(MediaSubtitle entity) {
+        if (entity == null) {
+            return null;
+        }
+
+        return MediaSubtitleDTO.builder()
+                .id(entity.getId())
+                .mediaFileId(entity.getMediaFile() != null ? entity.getMediaFile().getId() : null)
+                .streamIndex(entity.getStreamIndex())
+                .trackName(entity.getTrackName())
+                .language(entity.getLanguage())
+                .codecName(entity.getCodecName())
+                .subtitleFormat(entity.getSubtitleFormat())
+                .fileName(entity.getFileName())
+                .filePath(entity.getFilePath())
+                .fileSize(entity.getFileSize())
+                .timeOffset(entity.getTimeOffset())
+                .isExternal(entity.getIsExternal())
+                .sourceType(entity.getSourceType())
+                .build();
     }
 }

@@ -133,6 +133,7 @@ const router = useRouter()
 const videoId = computed(() => String(route.params.videoId || ''))
 const animeId = computed(() => String(route.query.animeId || ''))
 const episodeId = computed(() => String(route.query.episodeId || ''))
+const subtitleTrackId = computed(() => String(route.query.subtitleId || ''))
 
 // Anime Data State
 const animeData = ref(null)
@@ -155,6 +156,7 @@ const subtitleOctopus = ref(null)
 const tmpSubtitleOctopusSubUrl = ref('')
 const selectedSubtitleTrack = ref(null)
 let progressSaveTimer = null
+let subtitleOffsetPersistTimer = null
 
 const subtitlesOctopusWorkJsPath = '/js/JavascriptSubtitlesOctopus/subtitles-octopus-worker.js'
 const subtitlesOctopusWorkWasmPath = '/js/JavascriptSubtitlesOctopus/subtitles-octopus-worker.wasm'
@@ -166,6 +168,8 @@ const AIR_DAY_MAP = { 0: '周日', 1: '周一', 2: '周二', 3: '周三', 4: '�
 const STAFF_META_KEYS = ['原作', '导演', '音乐', '动画制作']
 const EPISODE_SELECTOR_TITLE_MAX_LEN = 28
 const RESOURCE_DIALOG_TITLE_MAX_LEN = 40
+const LIBASS_SUPPORTED_SUBTITLE_FORMATS = new Set(['ass', 'ssa'])
+const NATIVE_ARTPLAYER_SUBTITLE_FORMATS = new Set(['srt', 'vtt'])
 
 const DEFAULT_DANMAKU_SETTINGS = {
   speed: 7,
@@ -504,13 +508,17 @@ const fetchSubtitles = async (videoId) => {
       // 转换字幕数据为插件需要的格式
       return data.data
         .filter(subtitle => subtitle.subtitleFormat && subtitle.filePath)
-        .map(subtitle => ({
-          id: subtitle.id,
-          name: subtitle.trackName || `${subtitle.language || '未知语言'}`,
-          url: `/api/subtitles/${subtitle.id}/download`,
-          format: subtitle.subtitleFormat.toLowerCase(),
-          timeOffset: Number(subtitle.timeOffset || 0),
-        }))
+        .map(subtitle => {
+          const format = String(subtitle.subtitleFormat || '').toLowerCase()
+          return {
+            id: subtitle.id,
+            name: subtitle.trackName || `${subtitle.language || '未知语言'}`,
+            url: `/api/subtitles/${subtitle.id}/download`,
+            format,
+            timeOffset: Number(subtitle.timeOffset || 0),
+            isLibassSupported: LIBASS_SUPPORTED_SUBTITLE_FORMATS.has(format),
+          }
+        })
     }
 
     console.warn('字幕数据格式未知', data)
@@ -611,6 +619,69 @@ const toSubtitleOffsetSeconds = (subtitle) => {
   return Number.isFinite(offsetMs) ? offsetMs / 1000 : 0
 }
 
+const isLibassSubtitleTrack = (subtitle) => {
+  const format = String(subtitle?.format || '').toLowerCase()
+  return LIBASS_SUPPORTED_SUBTITLE_FORMATS.has(format)
+}
+
+const isNativeArtplayerSubtitleTrack = (subtitle) => {
+  const format = String(subtitle?.format || '').toLowerCase()
+  return NATIVE_ARTPLAYER_SUBTITLE_FORMATS.has(format)
+}
+
+const getNativeSubtitleOffsetMs = () => {
+  if (!art.value) {
+    return 0
+  }
+  return Math.round(Number(art.value.subtitleOffset || 0) * 1000)
+}
+
+const setNativeSubtitleOffsetMs = (offsetMs) => {
+  if (!art.value) {
+    return
+  }
+  art.value.subtitleOffset = Number(offsetMs || 0) / 1000
+}
+
+const getCurrentSubtitleOffsetMs = (track = selectedSubtitleTrack.value) => {
+  if (!track) {
+    return 0
+  }
+  if (isNativeArtplayerSubtitleTrack(track)) {
+    return getNativeSubtitleOffsetMs()
+  }
+  return Number(track.timeOffset || 0)
+}
+
+const switchSubtitleTrack = async (track) => {
+  if (!track?.id) {
+    return
+  }
+
+  const targetSubtitleId = String(track.id)
+  if (targetSubtitleId === String(subtitleTrackId.value || '')) {
+    if (isLibassSubtitleTrack(track) && subtitleOctopus.value) {
+      applySubtitleTrack(track)
+    }
+    return
+  }
+
+  try {
+    await router.replace({
+      name: 'Player',
+      params: { videoId: String(videoId.value || '') },
+      query: {
+        ...route.query,
+        animeId: String(animeId.value || ''),
+        episodeId: String(episodeId.value || ''),
+        subtitleId: targetSubtitleId,
+      },
+    })
+  } catch (error) {
+    console.warn('切换字幕轨道失败:', error)
+  }
+}
+
 const syncSubtitleOffset = (subtitle) => {
   const octopus = subtitleOctopus.value
   if (!octopus) {
@@ -654,6 +725,24 @@ const persistSubtitleOffset = async (subtitleId, offsetMs) => {
   }
 }
 
+const stopSubtitleOffsetPersistTimer = () => {
+  if (subtitleOffsetPersistTimer) {
+    clearTimeout(subtitleOffsetPersistTimer)
+    subtitleOffsetPersistTimer = null
+  }
+}
+
+const queuePersistSubtitleOffset = (track, offsetMs) => {
+  if (!isCurrentUserAdmin() || !track?.id) {
+    return
+  }
+
+  stopSubtitleOffsetPersistTimer()
+  subtitleOffsetPersistTimer = setTimeout(() => {
+    persistSubtitleOffset(track.id, offsetMs)
+  }, 280)
+}
+
 /**
  * 调整当前字幕延迟（单位毫秒）。
  * 快捷键：[ 减少 500ms，] 增加 500ms
@@ -663,6 +752,18 @@ const adjustSubtitleDelay = async (deltaMs) => {
   const track = selectedSubtitleTrack.value
   if (!track) return
 
+  if (isNativeArtplayerSubtitleTrack(track)) {
+    const nextOffsetMs = getNativeSubtitleOffsetMs() + deltaMs
+    setNativeSubtitleOffsetMs(nextOffsetMs)
+
+    const currentOffsetSec = Number(art.value?.subtitleOffset || 0).toFixed(1)
+    if (art.value?.notice) {
+      art.value.notice.show = `字幕延迟: ${Number(currentOffsetSec) >= 0 ? '+' : ''}${currentOffsetSec}s`
+    }
+    queuePersistSubtitleOffset(track, getNativeSubtitleOffsetMs())
+    return
+  }
+
   track.timeOffset = (track.timeOffset || 0) + deltaMs
   syncSubtitleOffset(track)
 
@@ -670,10 +771,7 @@ const adjustSubtitleDelay = async (deltaMs) => {
   if (art.value?.notice) {
     art.value.notice.show = `字幕延迟: ${Number(offsetSec) >= 0 ? '+' : ''}${offsetSec}s`
   }
-
-  if (isCurrentUserAdmin() && track.id) {
-    await persistSubtitleOffset(track.id, track.timeOffset)
-  }
+  queuePersistSubtitleOffset(track, track.timeOffset)
 }
 
 /**
@@ -1069,31 +1167,35 @@ const loadDanmakuAsync = async (seq, targetEpisodeId) => {
   }
 }
 
-const buildSubtitlePlugin = (subtitles) => {
+const buildSubtitlePlugin = (subtitles, preferredTrack = null) => {
   if (subtitles.length === 0) {
     selectedSubtitleTrack.value = null
     return null
   }
 
-  selectedSubtitleTrack.value = subtitles[0]
-  tmpSubtitleOctopusSubUrl.value = subtitles[0].url
+  const initialTrack = preferredTrack && isLibassSubtitleTrack(preferredTrack)
+    ? preferredTrack
+    : subtitles[0]
+
+  selectedSubtitleTrack.value = initialTrack
+  tmpSubtitleOctopusSubUrl.value = initialTrack.url
   return artplayerPluginAss({
     fonts: subtitlesOctopusFonts,
-    subUrl: subtitles[0].url,
+    subUrl: initialTrack.url,
     fallbackFont: '/static/SourceHanSansCN-Bold.woff2',
     workerUrl: subtitlesOctopusWorkJsPath,
     wasmUrl: subtitlesOctopusWorkWasmPath,
-    timeOffset: toSubtitleOffsetSeconds(subtitles[0]),
+    timeOffset: toSubtitleOffsetSeconds(initialTrack),
   })
 }
 
-const buildSubtitleSettings = (subtitles) => {
+const buildSubtitleSettings = (subtitles, activeSubtitleId = '') => {
   if (subtitles.length === 0) {
     tmpSubtitleOctopusSubUrl.value = ''
     return []
   }
 
-  return [{
+  const subtitleTrackSetting = {
     width: 220,
     html: '字幕',
     tooltip: '选择',
@@ -1119,20 +1221,43 @@ const buildSubtitleSettings = (subtitles) => {
         },
       },
       ...subtitles.map((subtitle, index) => ({
-        default: index === 0,
+        default: String(subtitle.id || '') === String(activeSubtitleId || '') || (index === 0 && !activeSubtitleId),
         html: subtitle.name || `字幕 ${index + 1}`,
         subtitle,
         url: subtitle.url,
       })),
     ],
     onSelect: (item) => {
-      if (!item.url || !subtitleOctopus.value) {
+      if (!item.subtitle) {
         return item.html
       }
-      applySubtitleTrack(item.subtitle || subtitles.find(subtitle => subtitle.url === item.url) || { url: item.url, timeOffset: 0 })
+      switchSubtitleTrack(item.subtitle)
       return item.html
     },
-  }]
+  }
+
+  return [subtitleTrackSetting]
+}
+
+const buildNativeSubtitleOption = (track) => {
+  if (!track?.url) {
+    return null
+  }
+
+  const mobile = isMobileViewport()
+  const nativeSubtitleFontSize = mobile ? '28px' : '34px'
+
+  return {
+    url: track.url,
+    type: track.format,
+    encoding: 'utf-8',
+    escape: true,
+    style: {
+      color: '#FFFFFF',
+      'font-size': nativeSubtitleFontSize,
+      'text-shadow': '0 2px 4px rgba(0, 0, 0, 0.65)',
+    },
+  }
 }
 
 const buildEpisodeControls = (mobile) => {
@@ -1215,6 +1340,23 @@ const createPlayerInstance = async () => {
 
     // 优先获取播放器必需数据：字幕；弹幕改为异步注入，避免阻塞首帧播放
     const subtitles = await fetchSubtitles(targetVideoId)
+    const routeSelectedTrack = subtitles.find((item) => String(item?.id || '') === String(subtitleTrackId.value || '')) || null
+    const subtitlesForLibass = subtitles.filter(isLibassSubtitleTrack)
+    const subtitlesForNative = subtitles.filter(isNativeArtplayerSubtitleTrack)
+    const fallbackTrack = subtitlesForLibass[0] || subtitlesForNative[0] || subtitles[0] || null
+    const activeSubtitleTrack = routeSelectedTrack || fallbackTrack
+    const useNativeSubtitle = Boolean(activeSubtitleTrack && isNativeArtplayerSubtitleTrack(activeSubtitleTrack))
+    const nativeSubtitleOption = useNativeSubtitle ? buildNativeSubtitleOption(activeSubtitleTrack) : null
+
+    if (useNativeSubtitle) {
+      selectedSubtitleTrack.value = activeSubtitleTrack
+      tmpSubtitleOctopusSubUrl.value = ''
+      console.info('[subtitle] 使用 Artplayer 原生字幕渲染', subtitlesForNative.map(item => item?.format))
+    }
+
+    if (subtitles.length > 0 && subtitlesForLibass.length === 0) {
+      console.warn('[subtitle] 当前资源无ASS/SSA字幕，已跳过libass字幕渲染', subtitles.map(item => item?.format))
+    }
     if (seq !== playerRecreateSeq) {
       return
     }
@@ -1222,8 +1364,10 @@ const createPlayerInstance = async () => {
     destroyPlayerInstance()
 
     const danmakuOptions = buildDanmakuOptions([], mobile)
-    const subtitlePlugin = buildSubtitlePlugin(subtitles)
-    const subtitleSettings = buildSubtitleSettings(subtitles)
+    const subtitlePlugin = useNativeSubtitle
+      ? null
+      : buildSubtitlePlugin(subtitlesForLibass, activeSubtitleTrack)
+    const subtitleSettings = buildSubtitleSettings(subtitles, String(activeSubtitleTrack?.id || ''))
     const episodeControls = buildEpisodeControls(mobile)
 
     // 初始化 Artplayer
@@ -1255,6 +1399,8 @@ const createPlayerInstance = async () => {
       airplay: !mobile,
       theme: '#c45d2b',
       lang: 'zh-cn',
+      ...(useNativeSubtitle ? { subtitleOffset: true } : {}),
+      ...(nativeSubtitleOption ? { subtitle: nativeSubtitleOption } : {}),
       moreVideoAttr: {
         crossOrigin: 'anonymous',
       },
@@ -1278,7 +1424,7 @@ const createPlayerInstance = async () => {
           click: () => {
             const track = selectedSubtitleTrack.value
             if (!track) return
-            const delta = -(track.timeOffset || 0)
+            const delta = -getCurrentSubtitleOffsetMs(track)
             if (delta !== 0) adjustSubtitleDelay(delta)
           },
         },
@@ -1337,6 +1483,16 @@ const createPlayerInstance = async () => {
     art.value.on('error', (error) => {
       console.error('播放器错误:', error)
       stopProgressSaveTimer()
+    })
+
+    art.value.on('subtitleOffset', (offsetSec) => {
+      const track = selectedSubtitleTrack.value
+      if (!track || !isNativeArtplayerSubtitleTrack(track)) {
+        return
+      }
+      const offsetMs = Math.round(Number(offsetSec || 0) * 1000)
+      track.timeOffset = offsetMs
+      queuePersistSubtitleOffset(track, offsetMs)
     })
 
     // 弹幕事件
@@ -1404,12 +1560,12 @@ onMounted(async () => {
  * - episodeId 变化：刷新弹幕/字幕（即便视频源不变）
  */
 watch(
-  () => [String(route.params.videoId || ''), String(route.query.episodeId || '')],
-  async ([newVideoId, newEpisodeId], [oldVideoId, oldEpisodeId]) => {
+  () => [String(route.params.videoId || ''), String(route.query.episodeId || ''), String(route.query.subtitleId || '')],
+  async ([newVideoId, newEpisodeId, newSubtitleId], [oldVideoId, oldEpisodeId, oldSubtitleId]) => {
     closeResourceDialog()
     isSummaryExpanded.value = false
 
-    if (newVideoId === oldVideoId && newEpisodeId === oldEpisodeId) {
+    if (newVideoId === oldVideoId && newEpisodeId === oldEpisodeId && newSubtitleId === oldSubtitleId) {
       return
     }
 
@@ -1431,6 +1587,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', updateViewportState)
   document.removeEventListener('keydown', handleSubtitleDelayKey)
   stopProgressSaveTimer()
+  stopSubtitleOffsetPersistTimer()
   savePlayProgress() // 组件销毁前保存最后一次进度
   destroyPlayerInstance()
 })
