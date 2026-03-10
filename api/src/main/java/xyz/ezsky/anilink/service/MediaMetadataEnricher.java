@@ -67,7 +67,10 @@ public class MediaMetadataEnricher {
             // 第二步：针对 MKV 文件抽取内封字幕（图片字幕按原格式导出）
             mediaSubtitleService.extractSubtitlesIfMkv(mediaFile);
 
-            // 第三步：标记已获取元数据
+            // 第三步：扫描外部字幕文件
+            mediaSubtitleService.scanExternalSubtitles(mediaFile);
+
+            // 第四步：标记已获取元数据
             mediaFile.setMetadataFetched(true);
 
             long duration = System.currentTimeMillis() - startTime;

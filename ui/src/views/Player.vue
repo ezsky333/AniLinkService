@@ -145,6 +145,7 @@ const artRef = ref(null)
 const art = shallowRef(null)
 const subtitleOctopus = ref(null)
 const tmpSubtitleOctopusSubUrl = ref('')
+const selectedSubtitleTrack = ref(null)
 let progressSaveTimer = null
 
 const subtitlesOctopusWorkJsPath = '/js/JavascriptSubtitlesOctopus/subtitles-octopus-worker.js'
@@ -456,9 +457,11 @@ const fetchSubtitles = async (videoId) => {
       return data.data
         .filter(subtitle => subtitle.subtitleFormat && subtitle.filePath)
         .map(subtitle => ({
+          id: subtitle.id,
           name: subtitle.trackName || `${subtitle.language || '未知语言'}`,
           url: `/api/subtitles/${subtitle.id}/download`,
-          format: subtitle.subtitleFormat.toLowerCase()
+          format: subtitle.subtitleFormat.toLowerCase(),
+          timeOffset: Number(subtitle.timeOffset || 0),
         }))
     }
 
@@ -555,6 +558,91 @@ const stopProgressSaveTimer = () => {
   }
 }
 
+const toSubtitleOffsetSeconds = (subtitle) => {
+  const offsetMs = Number(subtitle?.timeOffset || 0)
+  return Number.isFinite(offsetMs) ? offsetMs / 1000 : 0
+}
+
+const syncSubtitleOffset = (subtitle) => {
+  const octopus = subtitleOctopus.value
+  if (!octopus) {
+    return
+  }
+
+  const offsetSeconds = toSubtitleOffsetSeconds(subtitle)
+  octopus.timeOffset = offsetSeconds
+
+  if (octopus.video && typeof octopus.setCurrentTime === 'function') {
+    octopus.setCurrentTime(octopus.video.currentTime + offsetSeconds)
+  }
+}
+
+/**
+ * 判断当前登录用户是否为超级管理员
+ */
+const isCurrentUserAdmin = () => {
+  try {
+    const userInfoStr = localStorage.getItem('userInfo')
+    if (!userInfoStr) return false
+    const userInfo = JSON.parse(userInfoStr)
+    return Array.isArray(userInfo?.roleCodeList) && userInfo.roleCodeList.includes('super-admin')
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 将字幕偏移量持久化到后端（仅超管可用）
+ */
+const persistSubtitleOffset = async (subtitleId, offsetMs) => {
+  try {
+    const token = localStorage.getItem('token') || ''
+    await fetch(`/api/subtitles/${subtitleId}/offset?offset=${offsetMs}`, {
+      method: 'PUT',
+      headers: { satoken: token },
+    })
+  } catch (e) {
+    console.warn('保存字幕偏移量失败:', e)
+  }
+}
+
+/**
+ * 调整当前字幕延迟（单位毫秒）。
+ * 快捷键：[ 减少 500ms，] 增加 500ms
+ * 若当前用户为超管，同时将偏移量入库。
+ */
+const adjustSubtitleDelay = async (deltaMs) => {
+  const track = selectedSubtitleTrack.value
+  if (!track) return
+
+  track.timeOffset = (track.timeOffset || 0) + deltaMs
+  syncSubtitleOffset(track)
+
+  const offsetSec = (track.timeOffset / 1000).toFixed(1)
+  if (art.value?.notice) {
+    art.value.notice.show = `字幕延迟: ${Number(offsetSec) >= 0 ? '+' : ''}${offsetSec}s`
+  }
+
+  if (isCurrentUserAdmin() && track.id) {
+    await persistSubtitleOffset(track.id, track.timeOffset)
+  }
+}
+
+/**
+ * 键盘快捷键：[ 减少字幕延迟，] 增加字幕延迟（每次 500ms）
+ */
+const handleSubtitleDelayKey = (e) => {
+  const tag = document.activeElement?.tagName?.toLowerCase()
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') return
+  if (e.key === '[') {
+    e.preventDefault()
+    adjustSubtitleDelay(-500)
+  } else if (e.key === ']') {
+    e.preventDefault()
+    adjustSubtitleDelay(500)
+  }
+}
+
 const applySubtitleTrack = (subtitle) => {
   const octopus = subtitleOctopus.value
   if (!octopus) {
@@ -566,11 +654,14 @@ const applySubtitleTrack = (subtitle) => {
       if (typeof octopus.freeTrack === 'function') {
         octopus.freeTrack()
       }
+      selectedSubtitleTrack.value = null
       tmpSubtitleOctopusSubUrl.value = ''
       return
     }
 
+    selectedSubtitleTrack.value = subtitle
     tmpSubtitleOctopusSubUrl.value = subtitle.url
+    syncSubtitleOffset(subtitle)
 
     // 先释放旧轨道，避免切集后沿用旧字幕
     if (typeof octopus.freeTrack === 'function') {
@@ -912,9 +1003,11 @@ const buildDanmakuOptions = (danmakuData, mobile) => {
 
 const buildSubtitlePlugin = (subtitles) => {
   if (subtitles.length === 0) {
+    selectedSubtitleTrack.value = null
     return null
   }
 
+  selectedSubtitleTrack.value = subtitles[0]
   tmpSubtitleOctopusSubUrl.value = subtitles[0].url
   return artplayerPluginAss({
     fonts: subtitlesOctopusFonts,
@@ -922,7 +1015,7 @@ const buildSubtitlePlugin = (subtitles) => {
     fallbackFont: '/static/SourceHanSansCN-Bold.woff2',
     workerUrl: subtitlesOctopusWorkJsPath,
     wasmUrl: subtitlesOctopusWorkWasmPath,
-    timeOffset: 0,
+    timeOffset: toSubtitleOffsetSeconds(subtitles[0]),
   })
 }
 
@@ -951,11 +1044,8 @@ const buildSubtitleSettings = (subtitles) => {
           if (item.switch) {
             tmpSubtitleOctopusSubUrl.value = tmpSubtitleOctopusSubUrl.value || subtitles[0]?.url || ''
             subtitleOctopus.value.freeTrack()
-          } else if (tmpSubtitleOctopusSubUrl.value) {
-            subtitleOctopus.value.setTrackByUrl(tmpSubtitleOctopusSubUrl.value)
-            if (typeof subtitleOctopus.value.setSubUrl === 'function') {
-              subtitleOctopus.value.setSubUrl(tmpSubtitleOctopusSubUrl.value)
-            }
+          } else if (selectedSubtitleTrack.value?.url || tmpSubtitleOctopusSubUrl.value) {
+            applySubtitleTrack(selectedSubtitleTrack.value || subtitles.find(subtitle => subtitle.url === tmpSubtitleOctopusSubUrl.value) || subtitles[0])
           }
           return !item.switch
         },
@@ -963,6 +1053,7 @@ const buildSubtitleSettings = (subtitles) => {
       ...subtitles.map((subtitle, index) => ({
         default: index === 0,
         html: subtitle.name || `字幕 ${index + 1}`,
+        subtitle,
         url: subtitle.url,
       })),
     ],
@@ -970,7 +1061,7 @@ const buildSubtitleSettings = (subtitles) => {
       if (!item.url || !subtitleOctopus.value) {
         return item.html
       }
-      applySubtitleTrack({ url: item.url })
+      applySubtitleTrack(item.subtitle || subtitles.find(subtitle => subtitle.url === item.url) || { url: item.url, timeOffset: 0 })
       return item.html
     },
   }]
@@ -1108,6 +1199,25 @@ const createPlayerInstance = async () => {
       ],
       controls: episodeControls,
       settings: subtitleSettings,
+      contextmenu: [
+        {
+          html: '字幕延迟 −0.5s &nbsp;<kbd>快捷键：[</kbd>',
+          click: () => { adjustSubtitleDelay(-500) },
+        },
+        {
+          html: '字幕延迟 +0.5s &nbsp;<kbd>快捷键：]</kbd>',
+          click: () => { adjustSubtitleDelay(500) },
+        },
+        {
+          html: '重置字幕延迟',
+          click: () => {
+            const track = selectedSubtitleTrack.value
+            if (!track) return
+            const delta = -(track.timeOffset || 0)
+            if (delta !== 0) adjustSubtitleDelay(delta)
+          },
+        },
+      ],
     })
     if (seq !== playerRecreateSeq) {
       destroyPlayerInstance()
@@ -1202,6 +1312,7 @@ const createPlayerInstance = async () => {
 }
 
 onMounted(async () => {
+  document.addEventListener('keydown', handleSubtitleDelayKey)
   // 获取番剧数据
   await fetchAnimeData()
   await createPlayerInstance()
@@ -1237,6 +1348,7 @@ watch(() => animeId.value, async () => {
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('keydown', handleSubtitleDelayKey)
   stopProgressSaveTimer()
   savePlayProgress() // 组件销毁前保存最后一次进度
   destroyPlayerInstance()

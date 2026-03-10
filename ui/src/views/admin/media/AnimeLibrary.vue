@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { formatAnimeType } from '../../../utils/animeType'
 import MediaRematchDialog from '../../../components/admin/media/MediaRematchDialog.vue'
+import SubtitleManager from '../../../components/admin/media/SubtitleManager.vue'
 
 const API_BASE = '/api'
 
@@ -14,6 +15,8 @@ const episodesLoading = ref(false)
 const dialogOpen = ref(false)
 const rematchDialog = ref(false)
 const rematchTargetFile = ref(null)
+const subtitleDialog = ref(false)
+const selectedEpisodeForSubtitle = ref(null)
 
 // episodes pagination state for server-side paging
 const episodesPagination = ref({
@@ -225,6 +228,16 @@ const handleRematchApplied = async () => {
   if (selectedAnime.value) {
     await fetchEpisodes(selectedAnime.value.animeId, episodesPagination.value.page)
   }
+}
+
+const openSubtitleManager = (episode) => {
+  selectedEpisodeForSubtitle.value = episode
+  subtitleDialog.value = true
+}
+
+const closeSubtitleDialog = () => {
+  subtitleDialog.value = false
+  selectedEpisodeForSubtitle.value = null
 }
 
 </script>
@@ -489,6 +502,15 @@ const handleRematchApplied = async () => {
                   <v-icon start>mdi-sync</v-icon>
                   重搜匹配
                 </v-btn>
+                <v-btn
+                  size="x-small"
+                  variant="text"
+                  color="info"
+                  @click="openSubtitleManager(item)"
+                >
+                  <v-icon start>mdi-subtitles</v-icon>
+                  字幕
+                </v-btn>
               </template>
 
               <template v-slot:no-data>
@@ -509,6 +531,26 @@ const handleRematchApplied = async () => {
       @applied="handleRematchApplied"
       @update:model-value="(value) => { if (!value) closeRematchDialog() }"
     />
+
+    <!-- 字幕管理对话框 -->
+    <v-dialog v-model="subtitleDialog" max-width="900px" scrollable>
+      <v-card v-if="selectedEpisodeForSubtitle">
+        <v-card-title class="d-flex align-center">
+          <v-icon start>mdi-subtitles</v-icon>
+          字幕管理 - {{ selectedEpisodeForSubtitle.fileName }}
+          <v-spacer />
+          <v-btn
+            icon="mdi-close"
+            variant="text"
+            @click="closeSubtitleDialog"
+          />
+        </v-card-title>
+        <v-divider />
+        <v-card-text class="pa-4">
+          <SubtitleManager :media-file-id="selectedEpisodeForSubtitle.id" />
+        </v-card-text>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 

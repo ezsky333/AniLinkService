@@ -1,0 +1,294 @@
+<script setup>
+import { ref, onMounted } from 'vue'
+import axios from 'axios'
+import { askAppConfirm, showAppMessage } from '../../../utils/ui-feedback'
+
+const API_BASE = '/api'
+
+const subtitles = ref([])
+const loading = ref(false)
+const searchKeyword = ref('')
+const sourceType = ref(null)
+const pagination = ref({
+  page: 1,
+  itemsPerPage: 10,
+  pageCount: 0
+})
+
+const offsetDialog = ref(false)
+const selectedSubtitle = ref(null)
+const offsetValue = ref(0)
+
+const headers = [
+  { title: '字幕文件', key: 'fileName', width: '22%' },
+  { title: '视频文件', key: 'videoFileName', width: '22%' },
+  { title: '动漫', key: 'animeTitle', width: '18%' },
+  { title: '剧集', key: 'episodeTitle', width: '14%' },
+  { title: '来源', key: 'sourceType', width: '10%' },
+  { title: '偏移', key: 'timeOffset', width: '8%' },
+  { title: '操作', key: 'actions', width: '16%', sortable: false }
+]
+
+const fetchSubtitles = async (pageNum = pagination.value.page) => {
+  loading.value = true
+  try {
+    const params = {
+      page: pageNum - 1,
+      pageSize: pagination.value.itemsPerPage
+    }
+    if (searchKeyword.value.trim()) {
+      params.keyword = searchKeyword.value.trim()
+    }
+    if (sourceType.value) {
+      params.sourceType = sourceType.value
+    }
+
+    const res = await axios.get(`${API_BASE}/subtitles`, { params })
+    if (res.data?.code === 200 && res.data?.data) {
+      subtitles.value = res.data.data.content || []
+      pagination.value.page = (res.data.data.currentPage || 0) + 1
+      pagination.value.pageCount = res.data.data.totalElements || 0
+    }
+  } catch (error) {
+    showAppMessage('获取字幕列表失败: ' + (error.response?.data?.msg || error.message), 'error')
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleSearch = () => {
+  pagination.value.page = 1
+  fetchSubtitles(1)
+}
+
+const resetFilters = () => {
+  searchKeyword.value = ''
+  sourceType.value = null
+  pagination.value.page = 1
+  fetchSubtitles(1)
+}
+
+const onTableOptionsChange = (options) => {
+  const page = options.page || 1
+  const pageSize = options.itemsPerPage || 10
+  if (pageSize !== pagination.value.itemsPerPage) {
+    pagination.value.itemsPerPage = pageSize
+    pagination.value.page = 1
+    fetchSubtitles(1)
+    return
+  }
+  pagination.value.page = page
+  fetchSubtitles(page)
+}
+
+const handleDownload = (subtitle) => {
+  window.open(`${API_BASE}/subtitles/${subtitle.id}/download`, '_blank')
+}
+
+const openOffsetDialog = (subtitle) => {
+  selectedSubtitle.value = subtitle
+  offsetValue.value = subtitle.timeOffset || 0
+  offsetDialog.value = true
+}
+
+const submitOffset = async () => {
+  if (!selectedSubtitle.value) {
+    return
+  }
+  try {
+    const res = await axios.put(`${API_BASE}/subtitles/${selectedSubtitle.value.id}/offset`, null, {
+      params: { offset: offsetValue.value }
+    })
+    if (res.data?.code === 200) {
+      showAppMessage('偏移量更新成功', 'success')
+      offsetDialog.value = false
+      await fetchSubtitles(pagination.value.page)
+    } else {
+      showAppMessage(res.data?.msg || '偏移量更新失败', 'error')
+    }
+  } catch (error) {
+    showAppMessage('偏移量更新失败: ' + (error.response?.data?.msg || error.message), 'error')
+  }
+}
+
+const handleDelete = async (subtitle) => {
+  const confirmed = await askAppConfirm({
+    title: '删除字幕',
+    message: `确定要删除字幕 ${subtitle.fileName} 吗？`,
+    color: 'error'
+  })
+  if (!confirmed) {
+    return
+  }
+
+  try {
+    const res = await axios.delete(`${API_BASE}/subtitles/${subtitle.id}`)
+    if (res.data?.code === 200) {
+      showAppMessage('删除成功', 'success')
+      await fetchSubtitles(pagination.value.page)
+    } else {
+      showAppMessage(res.data?.msg || '删除失败', 'error')
+    }
+  } catch (error) {
+    showAppMessage('删除失败: ' + (error.response?.data?.msg || error.message), 'error')
+  }
+}
+
+const sourceTypeLabel = (value) => {
+  const labels = {
+    EMBEDDED: '内嵌',
+    EXTERNAL: '外部',
+    UPLOADED: '上传'
+  }
+  return labels[value] || value || '-'
+}
+
+const sourceTypeColor = (value) => {
+  const colors = {
+    EMBEDDED: 'success',
+    EXTERNAL: 'info',
+    UPLOADED: 'warning'
+  }
+  return colors[value] || 'grey'
+}
+
+const formatFileSize = (bytes) => {
+  if (!bytes) return '-'
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+}
+
+onMounted(() => {
+  fetchSubtitles(1)
+})
+</script>
+
+<template>
+  <div>
+    <v-card class="mb-4">
+      <v-card-text class="pa-4">
+        <v-row dense class="align-center">
+          <v-col cols="12" md="5">
+            <v-text-field
+              v-model="searchKeyword"
+              label="搜索字幕、视频或动漫"
+              variant="outlined"
+              density="compact"
+              prepend-inner-icon="mdi-magnify"
+              hide-details
+              clearable
+              @keyup.enter="handleSearch"
+            />
+          </v-col>
+          <v-col cols="12" md="3">
+            <v-select
+              v-model="sourceType"
+              :items="[
+                { title: '全部来源', value: null },
+                { title: '内嵌', value: 'EMBEDDED' },
+                { title: '外部', value: 'EXTERNAL' },
+                { title: '上传', value: 'UPLOADED' }
+              ]"
+              item-title="title"
+              item-value="value"
+              label="字幕来源"
+              variant="outlined"
+              density="compact"
+              hide-details
+              @update:model-value="handleSearch"
+            />
+          </v-col>
+          <v-col cols="12" md="4" class="d-flex ga-2 justify-md-end">
+            <v-btn color="primary" variant="elevated" size="small" @click="handleSearch">查询</v-btn>
+            <v-btn color="grey" variant="text" size="small" @click="resetFilters">重置</v-btn>
+          </v-col>
+        </v-row>
+      </v-card-text>
+    </v-card>
+
+    <v-card>
+      <v-data-table-server
+        :headers="headers"
+        :items="subtitles"
+        :loading="loading"
+        :items-per-page="pagination.itemsPerPage"
+        :items-length="pagination.pageCount"
+        density="compact"
+        class="elevation-0"
+        @update:options="onTableOptionsChange"
+      >
+        <template #item.fileName="{ item }">
+          <div>
+            <div class="text-body-2 text-truncate" :title="item.fileName">{{ item.fileName }}</div>
+            <div class="text-caption text-grey">{{ formatFileSize(item.fileSize) }}</div>
+          </div>
+        </template>
+
+        <template #item.videoFileName="{ item }">
+          <div>
+            <div class="text-body-2 text-truncate" :title="item.videoFileName">{{ item.videoFileName || '-' }}</div>
+            <div class="text-caption text-grey text-truncate" :title="item.videoFilePath">{{ item.videoFilePath || '-' }}</div>
+          </div>
+        </template>
+
+        <template #item.animeTitle="{ item }">
+          <div class="text-truncate" :title="item.animeTitle">{{ item.animeTitle || '-' }}</div>
+        </template>
+
+        <template #item.episodeTitle="{ item }">
+          <div class="text-truncate" :title="item.episodeTitle">{{ item.episodeTitle || '-' }}</div>
+        </template>
+
+        <template #item.sourceType="{ item }">
+          <v-chip size="small" label :color="sourceTypeColor(item.sourceType)">
+            {{ sourceTypeLabel(item.sourceType) }}
+          </v-chip>
+        </template>
+
+        <template #item.timeOffset="{ item }">
+          <span class="text-caption">{{ item.timeOffset || 0 }} ms</span>
+        </template>
+
+        <template #item.actions="{ item }">
+          <div class="d-flex align-center ga-1">
+            <v-btn icon="mdi-download" variant="text" size="x-small" color="primary" @click="handleDownload(item)" />
+            <v-btn icon="mdi-timer-cog" variant="text" size="x-small" color="info" @click="openOffsetDialog(item)" />
+            <v-btn icon="mdi-delete" variant="text" size="x-small" color="error" @click="handleDelete(item)" />
+          </div>
+        </template>
+
+        <template #no-data>
+          <div class="text-center py-8">
+            <v-icon size="64" color="grey-lighten-1">mdi-subtitles-outline</v-icon>
+            <p class="text-body-1 mt-4 text-grey">暂无字幕数据</p>
+          </div>
+        </template>
+      </v-data-table-server>
+    </v-card>
+
+    <v-dialog v-model="offsetDialog" max-width="420">
+      <v-card>
+        <v-card-title>设置字幕偏移量</v-card-title>
+        <v-divider />
+        <v-card-text class="pt-4">
+          <v-text-field
+            v-model.number="offsetValue"
+            label="偏移量（毫秒）"
+            type="number"
+            variant="outlined"
+            density="compact"
+            hint="正数表示延后，负数表示提前"
+            persistent-hint
+          />
+        </v-card-text>
+        <v-divider />
+        <v-card-actions>
+          <v-spacer />
+          <v-btn color="grey" variant="text" @click="offsetDialog = false">取消</v-btn>
+          <v-btn color="primary" variant="elevated" @click="submitOffset">保存</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+  </div>
+</template>

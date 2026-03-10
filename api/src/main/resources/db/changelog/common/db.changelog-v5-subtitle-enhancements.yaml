@@ -1,0 +1,49 @@
+databaseChangeLog:
+  - changeSet:
+      id: add-subtitle-offset-and-type
+      author: anilink
+      description: "Add subtitle offset and external file type fields"
+      changes:
+        - addColumn:
+            tableName: media_subtitle
+            columns:
+              - column:
+                  name: time_offset
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: is_external
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: source_type
+                  type: VARCHAR(32)
+                  defaultValue: 'EMBEDDED'
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: modify-subtitle-stream-index-nullable
+      author: anilink
+      description: "Make stream_index nullable for external subtitles"
+      changes:
+        - dropNotNullConstraint:
+            tableName: media_subtitle
+            columnName: stream_index
+            columnDataType: INT
+
+  - changeSet:
+      id: add-subtitle-file-path-index
+      author: anilink
+      description: "Add index on file_path for external subtitle lookup"
+      changes:
+        - createIndex:
+            tableName: media_subtitle
+            indexName: idx_media_subtitle_file_path
+            columns:
+              - column:
+                  name: file_path

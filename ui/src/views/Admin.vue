@@ -14,6 +14,7 @@ const SiteConfig = defineAsyncComponent(() => import('./admin/SiteConfig.vue'))
 const MediaLibrary = defineAsyncComponent(() => import('./admin/media/MediaLibrary.vue'))
 const VideoFileManager = defineAsyncComponent(() => import('./admin/media/VideoFileManager.vue'))
 const AnimeLibrary = defineAsyncComponent(() => import('./admin/media/AnimeLibrary.vue'))
+const SubtitleLibrary = defineAsyncComponent(() => import('./admin/media/SubtitleLibrary.vue'))
 const QueueProgress = defineAsyncComponent(() => import('./admin/media/QueueProgress.vue'))
 const UserManagement = defineAsyncComponent(() => import('./admin/UserManagement.vue'))
 
@@ -26,9 +27,10 @@ const siteMenuItem = { id: 'site', title: '服务配置', icon: 'mdi-web', compo
 
 const mediaMenuItems = [
   { id: 'queue', title: '队列进度', icon: 'mdi-progress-clock', component: QueueProgress },
-    { id: 'anime', title: '动漫管理', icon: 'mdi-library', component: AnimeLibrary },
+  { id: 'anime', title: '动漫管理', icon: 'mdi-library', component: AnimeLibrary },
   { id: 'media', title: '媒体库配置', icon: 'mdi-folder-multiple', component: MediaLibrary },
-  { id: 'files', title: '视频文件管理', icon: 'mdi-file-video', component: VideoFileManager }
+  { id: 'files', title: '视频文件管理', icon: 'mdi-file-video', component: VideoFileManager },
+  { id: 'subtitles', title: '字幕管理', icon: 'mdi-subtitles-outline', component: SubtitleLibrary }
 ]
 
 const componentMap = Object.fromEntries(

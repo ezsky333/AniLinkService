@@ -20,7 +20,7 @@ public class MediaSubtitle {
     @JoinColumn(name = "media_file_id", nullable = false)
     private MediaFile mediaFile;
 
-    @Column(name = "stream_index", nullable = false)
+    @Column(name = "stream_index")
     private Integer streamIndex;
 
     @Column(name = "track_name", nullable = false, length = 255)
@@ -43,6 +43,15 @@ public class MediaSubtitle {
 
     @Column(name = "file_size")
     private Long fileSize;
+
+    @Column(name = "time_offset", nullable = false)
+    private Long timeOffset = 0L;
+
+    @Column(name = "is_external", nullable = false)
+    private Boolean isExternal = false;
+
+    @Column(name = "source_type", nullable = false, length = 32)
+    private String sourceType = "EMBEDDED";
 
     @Column(name = "created_at", nullable = false, updatable = false, insertable = false,
             columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")

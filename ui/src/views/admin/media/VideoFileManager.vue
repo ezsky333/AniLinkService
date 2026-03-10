@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import { askAppConfirm, showAppMessage } from '../../../utils/ui-feedback'
 import MediaRematchDialog from '../../../components/admin/media/MediaRematchDialog.vue'
+import SubtitleManager from '../../../components/admin/media/SubtitleManager.vue'
 
 const API_BASE = '/api'
 
@@ -16,6 +17,8 @@ const mediaLibraries = ref([])
 const reprocessingLibraryId = ref(null)
 const rematchDialog = ref(false)
 const rematchTargetFile = ref(null)
+const subtitleDialog = ref(false)
+const selectedFileForSubtitle = ref(null)
 
 const pagination = ref({
   page: 1,
@@ -90,6 +93,16 @@ const closeRematchDialog = () => {
 
 const handleRematchApplied = async () => {
   await fetchMediaFiles(pagination.value.page)
+}
+
+const openSubtitleManager = (file) => {
+  selectedFileForSubtitle.value = file
+  subtitleDialog.value = true
+}
+
+const closeSubtitleDialog = () => {
+  subtitleDialog.value = false
+  selectedFileForSubtitle.value = null
 }
 
 // 查看文件详情
@@ -383,6 +396,18 @@ onMounted(() => {
                 />
               </template>
             </v-tooltip>
+            <v-tooltip location="top" text="字幕管理">
+              <template #activator="{ props }">
+                <v-btn
+                  icon="mdi-subtitles"
+                  variant="text"
+                  size="x-small"
+                  color="purple"
+                  v-bind="props"
+                  @click="openSubtitleManager(item)"
+                />
+              </template>
+            </v-tooltip>
             <v-menu>
               <template v-slot:activator="{ props }">
                 <v-btn
@@ -521,6 +546,26 @@ onMounted(() => {
             关闭
           </v-btn>
         </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- 字幕管理对话框 -->
+    <v-dialog v-model="subtitleDialog" max-width="900px" scrollable>
+      <v-card v-if="selectedFileForSubtitle">
+        <v-card-title class="d-flex align-center">
+          <v-icon start>mdi-subtitles</v-icon>
+          字幕管理 - {{ selectedFileForSubtitle.fileName }}
+          <v-spacer />
+          <v-btn
+            icon="mdi-close"
+            variant="text"
+            @click="closeSubtitleDialog"
+          />
+        </v-card-title>
+        <v-divider />
+        <v-card-text class="pa-4">
+          <SubtitleManager :media-file-id="selectedFileForSubtitle.id" />
+        </v-card-text>
       </v-card>
     </v-dialog>
   </div>
