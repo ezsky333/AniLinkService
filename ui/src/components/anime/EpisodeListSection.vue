@@ -26,7 +26,7 @@
       >
         <div class="anime-episode-left">
           <span class="anime-episode-num">{{ episodeNumberDisplay(ep) }}</span>
-          <span class="anime-episode-title">{{ ep.episodeTitle }}</span>
+          <span class="anime-episode-title" :title="ep.episodeTitle">{{ episodeTitleDisplay(ep) }}</span>
           <span v-if="isToday(ep)" class="anime-today-tag">今日更新</span>
           <span v-if="isCurrentEpisode(ep)" class="anime-current-tag">正在播放</span>
         </div>
@@ -86,6 +86,8 @@ const tabs = [
   { label: '全部', value: 'all' }
 ];
 
+const EPISODE_TITLE_MAX_LEN = 36;
+
 const todayStr = new Date().toISOString().slice(0, 10);
 
 const formatDate = (iso) => iso ? iso.slice(0, 10) : '';
@@ -142,6 +144,18 @@ const episodeNumberDisplay = (ep) => {
   if (type === 'special') return '特典';
   if (type === 'credit') return '主题';
   return ep.episodeNumber;
+};
+
+const truncateText = (text, maxLen) => {
+  const str = String(text || '');
+  if (str.length <= maxLen) {
+    return str;
+  }
+  return `${str.slice(0, maxLen)}...`;
+};
+
+const episodeTitleDisplay = (ep) => {
+  return truncateText(ep?.episodeTitle || '', EPISODE_TITLE_MAX_LEN);
 };
 
 const selectTab = (value) => {
@@ -209,5 +223,22 @@ const playEpisode = (ep) => {
 .anime-watch-btn.disabled:hover {
   transform: none;
   filter: none;
+}
+
+.anime-episode-left {
+  min-width: 0;
+}
+
+.anime-episode-title {
+  max-width: min(52vw, 520px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .anime-episode-title {
+    max-width: min(64vw, 340px);
+  }
 }
 </style>

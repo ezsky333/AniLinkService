@@ -25,6 +25,13 @@
           </div>
         </div>
 
+        <div v-if="showDdplayButton" class="player-actions">
+          <button class="ddplay-btn" @click="openWithDdplay">
+            <i class="mdi mdi-play-network-outline"></i>
+            <span>通过弹弹play播放</span>
+          </button>
+        </div>
+
         <!-- 番剧信息部分 -->
         <div v-if="animeData" class="anime-info-section">
           <!-- 头部信息 -->
@@ -140,6 +147,7 @@ const showResourceDialog = ref(false)
 const isSwitching = ref(false)
 const selectedResources = ref([])
 const selectedEpisodeTitle = ref('')
+const isDesktopViewport = ref(true)
 
 const artRef = ref(null)
 const art = shallowRef(null)
@@ -156,6 +164,8 @@ let playerRecreateSeq = 0
 const DANMAKU_SETTINGS_STORAGE_KEY = 'anilink:danmaku:settings:v1'
 const AIR_DAY_MAP = { 0: '周日', 1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 7: '周日' }
 const STAFF_META_KEYS = ['原作', '导演', '音乐', '动画制作']
+const EPISODE_SELECTOR_TITLE_MAX_LEN = 28
+const RESOURCE_DIALOG_TITLE_MAX_LEN = 40
 
 const DEFAULT_DANMAKU_SETTINGS = {
   speed: 7,
@@ -392,6 +402,44 @@ const playableEpisodes = computed(() => {
     return getEpisodeResources(ep.episodeId).length > 0
   })
 })
+
+const currentEpisodeResource = computed(() => {
+  const targetVideoId = String(videoId.value || '')
+  if (!targetVideoId) {
+    return null
+  }
+  return existingEpisodes.value.find((item) => String(item?.id || '') === targetVideoId) || null
+})
+
+const showDdplayButton = computed(() => {
+  return isDesktopViewport.value && Boolean(videoId.value)
+})
+
+const ddplayLink = computed(() => {
+  if (!videoId.value || typeof window === 'undefined') {
+    return ''
+  }
+
+  const streamUrl = `${window.location.origin}/api/media-files/stream/${videoId.value}`
+  const filePath = currentEpisodeResource.value?.filePath || currentEpisodeResource.value?.fileName || ''
+  const withOptionalFilePath = filePath
+    ? `${streamUrl}|filePath=${filePath}`
+    : streamUrl
+
+  return `ddplay:${encodeURIComponent(withOptionalFilePath)}`
+})
+
+const updateViewportState = () => {
+  isDesktopViewport.value = !isMobileViewport()
+}
+
+const openWithDdplay = () => {
+  if (!ddplayLink.value) {
+    showAppMessage('未获取到可播放地址', 'warning')
+    return
+  }
+  window.location.href = ddplayLink.value
+}
 
 const getCurrentPlayableEpisodeIndex = () => {
   const currentEpisodeKey = String(episodeId.value || '')
@@ -842,6 +890,14 @@ const getEpisodeResources = (episodeId) => {
   return existingEpisodes.value.filter((item) => String(item.episodeId) === key && item.id !== undefined && item.id !== null)
 }
 
+const truncateText = (text, maxLen) => {
+  const str = String(text || '')
+  if (str.length <= maxLen) {
+    return str
+  }
+  return `${str.slice(0, maxLen)}...`
+}
+
 /**
  * 选择资源并播放
  */
@@ -897,7 +953,7 @@ const playEpisode = (ep) => {
   }
 
   selectedResources.value = resources
-  selectedEpisodeTitle.value = ep.episodeTitle || `第${ep.episodeNumber}话`
+  selectedEpisodeTitle.value = truncateText(ep.episodeTitle || `第${ep.episodeNumber}话`, RESOURCE_DIALOG_TITLE_MAX_LEN)
   showResourceDialog.value = true
 }
 
@@ -998,6 +1054,18 @@ const buildDanmakuOptions = (danmakuData, mobile) => {
     maxWidth: mobile ? 320 : 500,
     filter: (danmu) => danmu.text && danmu.text.length < 200,
     beforeEmit: (danmu) => danmu.text && !!danmu.text.trim(),
+  }
+}
+
+const loadDanmakuAsync = async (seq, targetEpisodeId) => {
+  try {
+    const danmakuData = await fetchDanmaku(targetEpisodeId)
+    if (seq !== playerRecreateSeq || !art.value?.plugins?.artplayerPluginDanmuku) {
+      return
+    }
+    await art.value.plugins.artplayerPluginDanmuku.load(danmakuData)
+  } catch (error) {
+    console.error('异步加载弹幕失败:', error)
   }
 }
 
@@ -1104,7 +1172,7 @@ const buildEpisodeControls = (mobile) => {
     tooltip: '选择分集',
     selector: playableEpisodes.value.map((ep, index) => ({
       default: String(ep.episodeId) === String(episodeId.value),
-      html: `第${ep.episodeNumber || index + 1}话 ${ep.episodeTitle || ''}`.trim(),
+      html: `第${ep.episodeNumber || index + 1}话 ${truncateText(ep.episodeTitle || '', EPISODE_SELECTOR_TITLE_MAX_LEN)}`.trim(),
       value: String(ep.episodeId || ''),
       episodeId: String(ep.episodeId || ''),
     })),
@@ -1118,7 +1186,7 @@ const buildEpisodeControls = (mobile) => {
           art.value.notice.show = '该分集暂无可播放资源'
         }
       }
-      return item?.html || '分集'
+      return '分集'
     },
   },
 ]
@@ -1145,18 +1213,15 @@ const createPlayerInstance = async () => {
     const restoreFullscreenWeb = Boolean(prevArt && prevArt.fullscreenWeb)
     const restoreFullscreen = !restoreFullscreenWeb && Boolean(prevArt && prevArt.fullscreen)
 
-    // 先并行拉取数据，再销毁重建，减少全屏状态下的“卡住+晚退出”体感
-    const [danmakuData, subtitles] = await Promise.all([
-      fetchDanmaku(targetEpisodeId),
-      fetchSubtitles(targetVideoId),
-    ])
+    // 优先获取播放器必需数据：字幕；弹幕改为异步注入，避免阻塞首帧播放
+    const subtitles = await fetchSubtitles(targetVideoId)
     if (seq !== playerRecreateSeq) {
       return
     }
 
     destroyPlayerInstance()
 
-    const danmakuOptions = buildDanmakuOptions(danmakuData, mobile)
+    const danmakuOptions = buildDanmakuOptions([], mobile)
     const subtitlePlugin = buildSubtitlePlugin(subtitles)
     const subtitleSettings = buildSubtitleSettings(subtitles)
     const episodeControls = buildEpisodeControls(mobile)
@@ -1280,7 +1345,17 @@ const createPlayerInstance = async () => {
     })
 
     art.value.on('artplayerPluginDanmuku:loaded', (danmus) => {
-      console.log('已加载弹幕数:', danmus.length)
+      const count = Array.isArray(danmus) ? danmus.length : 0
+      console.log('已加载弹幕数:', count)
+      if (art.value?.notice) {
+        // 延迟一小段时间，避免被播放器初始化阶段的其他状态提示覆盖
+        setTimeout(() => {
+          if (!art.value?.notice) {
+            return
+          }
+          art.value.notice.show = count > 0 ? `弹幕已加载 ${count} 条` : '未加载到弹幕'
+        }, 180)
+      }
     })
 
     art.value.on('artplayerPluginDanmuku:config', (option) => {
@@ -1304,6 +1379,9 @@ const createPlayerInstance = async () => {
     art.value.on('artplayerPluginDanmuku:error', (error) => {
       console.error('弹幕加载错误:', error)
     })
+
+    // 播放器已可用后再异步加载弹幕，避免阻塞播放启动
+    loadDanmakuAsync(seq, targetEpisodeId)
   } finally {
     if (seq === playerRecreateSeq) {
       isSwitching.value = false
@@ -1312,6 +1390,8 @@ const createPlayerInstance = async () => {
 }
 
 onMounted(async () => {
+  updateViewportState()
+  window.addEventListener('resize', updateViewportState)
   document.addEventListener('keydown', handleSubtitleDelayKey)
   // 获取番剧数据
   await fetchAnimeData()
@@ -1348,6 +1428,7 @@ watch(() => animeId.value, async () => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateViewportState)
   document.removeEventListener('keydown', handleSubtitleDelayKey)
   stopProgressSaveTimer()
   savePlayProgress() // 组件销毁前保存最后一次进度
@@ -1406,6 +1487,41 @@ onBeforeUnmount(() => {
   margin-bottom: 28px;
 }
 
+.player-actions {
+  margin: -12px 0 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ddplay-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #1f8f67;
+  background: #e8f7f1;
+  color: #116449;
+  border-radius: 999px;
+  padding: 9px 16px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ddplay-btn i {
+  font-size: 1.05rem;
+}
+
+.ddplay-btn:hover {
+  background: #d8f0e7;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(17, 100, 73, 0.18);
+}
+
+.ddplay-btn:active {
+  transform: translateY(0);
+}
+
 .player-switching-overlay {
   position: absolute;
   inset: 0;
@@ -1445,6 +1561,12 @@ onBeforeUnmount(() => {
   }
 }
 
+@media (max-width: 768px) {
+  .player-actions {
+    display: none;
+  }
+}
+
 .artplayer-container {
   width: 100%;
   aspect-ratio: 16 / 9;
@@ -1456,6 +1578,23 @@ onBeforeUnmount(() => {
 .artplayer-container :deep(.art-video-player) {
   width: 100% !important;
   height: 100% !important;
+}
+
+.artplayer-container :deep(.art-notice) {
+  top: 12px;
+  right: 12px;
+  left: auto;
+  bottom: auto;
+  transform: none;
+  pointer-events: none;
+}
+
+.artplayer-container :deep(.art-notice-inner) {
+  background: rgba(26, 26, 26, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  font-size: 12px;
+  padding: 6px 10px;
 }
 
 /* Info Section */
@@ -1492,6 +1631,9 @@ onBeforeUnmount(() => {
 .resource-dialog-subtitle {
   margin: 8px 0 14px;
   color: #6b5f55;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .resource-list {
