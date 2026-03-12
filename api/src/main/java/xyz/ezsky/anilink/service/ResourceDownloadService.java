@@ -174,15 +174,8 @@ public class ResourceDownloadService {
         ActiveDownloadContext ctx = activeContexts.get(taskId);
         if (ctx != null) {
             ctx.cancelled.set(true);
-            TorrentHandle handle = ctx.handleRef.get();
-            if (handle != null) {
-                try {
-                    synchronized (sessionLock) {
-                        globalSessionManager.remove(handle);
-                    }
-                } catch (Exception ignored) {
-                }
-            }
+            // 避免在取消线程中直接移除句柄，防止与下载线程的 status() 轮询并发触发 JNI 崩溃。
+            // 统一由下载线程在 finally 中执行 remove(handle) 清理。
         }
 
         Future<?> future = taskFutures.get(taskId);
@@ -410,7 +403,17 @@ public class ResourceDownloadService {
             boolean finishedHandled = false;
             while (true) {
                 checkCancellation(taskId, context);
-                TorrentStatus status = handle.status();
+                TorrentStatus status;
+                try {
+                    synchronized (sessionLock) {
+                        if (!handle.isValid()) {
+                            throw new IllegalStateException("下载句柄已失效");
+                        }
+                        status = handle.status();
+                    }
+                } catch (Exception e) {
+                    throw new IllegalStateException("读取下载状态失败，下载句柄可能已释放", e);
+                }
                 int progress = (int) Math.round(status.progress() * 100.0d);
                 long downloadedBytes = status.totalDone();
                 long totalBytes = status.totalWanted();
