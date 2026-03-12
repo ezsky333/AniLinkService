@@ -184,9 +184,3 @@ docker run -d \
 - Artplayer: https://artplayer.org/
 - artplayer-plugin-danmuku: https://github.com/zhw2590582/ArtPlayer/tree/master/packages/artplayer-plugin-danmuku
 - jlibtorrent: https://github.com/frostwire/frostwire-jlibtorrent
-
-## 当前待完善
-
-- 用户中心页面功能仍较基础（当前为占位内容）
-- 自动化测试覆盖率有待补充
-- Docker Compose/一体化部署示例可继续完善
