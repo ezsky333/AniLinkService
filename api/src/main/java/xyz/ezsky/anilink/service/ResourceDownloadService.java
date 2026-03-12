@@ -20,6 +20,7 @@ import xyz.ezsky.anilink.repository.MediaLibraryRepository;
 import xyz.ezsky.anilink.repository.ResourceDownloadTaskRepository;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.net.URLEncoder;
 import java.nio.file.*;
 import java.nio.charset.StandardCharsets;
@@ -91,7 +92,7 @@ public class ResourceDownloadService {
     public void resumeInProgressTasks() {
         synchronized (sessionLock) {
             try {
-                globalSessionManager.start();
+                startSessionWithContainerSafeDiskIO();
             } catch (Exception e) {
                 log.error("Failed to start shared jlibtorrent session", e);
             }
@@ -105,6 +106,54 @@ public class ResourceDownloadService {
             submitTask(task.getId());
         }
         log.info("Resumed {} in-progress resource download task(s) after startup", resumable.size());
+    }
+
+    private void startSessionWithContainerSafeDiskIO() {
+        if (!isUnixLikeOs()) {
+            globalSessionManager.start();
+            return;
+        }
+
+        try {
+            Class<?> paramsClass = Class.forName("com.frostwire.jlibtorrent.SessionParams");
+            Object params = paramsClass.getConstructor().newInstance();
+
+            boolean posixDiskIOEnabled = false;
+            try {
+                Method noArg = paramsClass.getMethod("setPosixDiskIO");
+                noArg.invoke(params);
+                posixDiskIOEnabled = true;
+            } catch (NoSuchMethodException ignored) {
+                // 兼容不同版本签名
+            }
+
+            if (!posixDiskIOEnabled) {
+                try {
+                    Method withBoolean = paramsClass.getMethod("setPosixDiskIO", boolean.class);
+                    withBoolean.invoke(params, true);
+                    posixDiskIOEnabled = true;
+                } catch (NoSuchMethodException ignored) {
+                    // 保持降级路径，避免因 API 差异导致启动失败
+                }
+            }
+
+            if (posixDiskIOEnabled) {
+                Method startWithParams = globalSessionManager.getClass().getMethod("start", paramsClass);
+                startWithParams.invoke(globalSessionManager, params);
+                log.info("Started jlibtorrent session with posix_disk_io enabled (Unix-like OS workaround)");
+            } else {
+                globalSessionManager.start();
+                log.warn("SessionParams.setPosixDiskIO not available in this jlibtorrent version, started with default settings");
+            }
+        } catch (Exception e) {
+            log.warn("Failed to apply posix_disk_io workaround, falling back to default session start", e);
+            globalSessionManager.start();
+        }
+    }
+
+    private boolean isUnixLikeOs() {
+        String osName = System.getProperty("os.name", "").toLowerCase();
+        return !osName.contains("win");
     }
 
     public ResourceSearchVO.DownloadTask startDownload(ResourceSearchDownloadRequest request) {

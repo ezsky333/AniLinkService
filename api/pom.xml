@@ -17,7 +17,7 @@
 	<description>a project to link anime to danmu</description>
 	<properties>
 		<java.version>17</java.version>
-		<jlibtorrent.version>2.0.12.7</jlibtorrent.version>
+		<jlibtorrent.version>2.0.13.6</jlibtorrent.version>
 		<!-- 编码 -->
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
