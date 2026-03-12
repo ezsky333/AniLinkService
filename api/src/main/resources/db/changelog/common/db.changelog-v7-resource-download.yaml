@@ -1,0 +1,129 @@
+databaseChangeLog:
+  - changeSet:
+      id: v7-insert-resource-config
+      author: anilink
+      preConditions:
+        - onFail: MARK_RAN
+      changes:
+        - sql:
+            sql: |
+              INSERT INTO site_config (config_key, config_value, description, created_at, updated_at)
+              VALUES
+                ('resource_node_base_url', '', '资源搜索节点地址', NOW(), NOW()),
+                ('resource_jtorrent_command_template', 'jtorrent download --uri "{magnet}" --output "{outputDir}"', 'jtorrent 命令模板', NOW(), NOW()),
+                                ('resource_download_temp_dir', './data/media-data/download-temp', '下载暂存目录', NOW(), NOW())
+            dbms: h2,postgresql
+
+  - changeSet:
+      id: v7-create-resource-download-task-table
+      author: anilink
+      changes:
+        - createTable:
+            tableName: resource_download_task
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: title
+                  type: VARCHAR(600)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: magnet
+                  type: CLOB
+                  constraints:
+                    nullable: false
+              - column:
+                  name: page_url
+                  type: VARCHAR(1200)
+              - column:
+                  name: file_size
+                  type: VARCHAR(120)
+              - column:
+                  name: publish_date
+                  type: VARCHAR(64)
+              - column:
+                  name: subgroup_name
+                  type: VARCHAR(255)
+              - column:
+                  name: type_name
+                  type: VARCHAR(255)
+              - column:
+                  name: library_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_resource_download_task_library
+                    references: media_library(id)
+              - column:
+                  name: status
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: progress_percent
+                  type: INT
+              - column:
+                  name: downloaded_bytes
+                  type: BIGINT
+              - column:
+                  name: total_bytes
+                  type: BIGINT
+              - column:
+                  name: speed_text
+                  type: VARCHAR(100)
+              - column:
+                  name: output_message
+                  type: CLOB
+              - column:
+                  name: error_message
+                  type: CLOB
+              - column:
+                  name: temp_dir
+                  type: VARCHAR(2048)
+              - column:
+                  name: final_path
+                  type: VARCHAR(2048)
+              - column:
+                  name: media_file_id
+                  type: BIGINT
+              - column:
+                  name: started_at
+                  type: TIMESTAMP
+              - column:
+                  name: finished_at
+                  type: TIMESTAMP
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: v7-add-resource-download-task-index
+      author: anilink
+      changes:
+        - createIndex:
+            tableName: resource_download_task
+            indexName: idx_resource_download_task_status
+            columns:
+              - column:
+                  name: status
+        - createIndex:
+            tableName: resource_download_task
+            indexName: idx_resource_download_task_library
+            columns:
+              - column:
+                  name: library_id

@@ -1,0 +1,18 @@
+databaseChangeLog:
+  - changeSet:
+      id: v9-normalize-resource-download-temp-dir-default
+      author: anilink
+      preConditions:
+        - onFail: MARK_RAN
+      changes:
+        - sql:
+            sql: |
+              UPDATE site_config
+              SET config_value = './data/media-data/download-temp', updated_at = NOW()
+              WHERE config_key = 'resource_download_temp_dir'
+                AND (
+                  config_value IS NULL
+                  OR TRIM(config_value) = ''
+                  OR config_value = './data/download-temp'
+                )
+            dbms: h2,postgresql

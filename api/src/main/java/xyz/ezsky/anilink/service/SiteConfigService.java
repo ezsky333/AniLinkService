@@ -34,6 +34,17 @@ public class SiteConfigService {
     private static final String INSTALLED = "installed";
     private static final String DANDAN_APP_ID = "dandan_app_id";
     private static final String DANDAN_APP_SECRET = "dandan_app_secret";
+    private static final String RESOURCE_NODE_BASE_URL = "resource_node_base_url";
+    private static final String RESOURCE_DOWNLOAD_TEMP_DIR = "resource_download_temp_dir";
+    private static final String RESOURCE_DOWNLOAD_MAX_CONCURRENCY = "resource_download_max_concurrency";
+    private static final String RESOURCE_DOWNLOAD_LIMIT_KBPS = "resource_download_limit_kbps";
+    private static final String RESOURCE_UPLOAD_LIMIT_KBPS = "resource_upload_limit_kbps";
+    private static final String RESOURCE_SEED_TIME_SECONDS = "resource_seed_time_seconds";
+    private static final String RESOURCE_CUSTOM_TRACKERS = "resource_custom_trackers";
+    private static final String RESOURCE_NODE_PROXY_HOST = "resource_node_proxy_host";
+    private static final String RESOURCE_NODE_PROXY_PORT = "resource_node_proxy_port";
+    private static final String RSS_PROXY_HOST = "rss_proxy_host";
+    private static final String RSS_PROXY_PORT = "rss_proxy_port";
     private static final String AUTH_REGISTER_ENABLED = "auth_register_enabled";
     private static final String REMOTE_ACCESS_ENABLED = "remote_access_enabled";
     private static final String REMOTE_ACCESS_TOKEN_REQUIRED = "remote_access_token_required";
@@ -83,6 +94,19 @@ public class SiteConfigService {
             .ifPresent(config -> vo.setDandanAppId(config.getConfigValue()));
         siteConfigRepository.findByConfigKey(DANDAN_APP_SECRET)
             .ifPresent(config -> vo.setDandanAppSecret(config.getConfigValue()));
+        siteConfigRepository.findByConfigKey(RESOURCE_NODE_BASE_URL)
+            .ifPresent(config -> vo.setResourceNodeBaseUrl(config.getConfigValue()));
+        siteConfigRepository.findByConfigKey(RESOURCE_DOWNLOAD_TEMP_DIR)
+            .ifPresent(config -> vo.setResourceDownloadTempDir(config.getConfigValue()));
+        vo.setResourceDownloadMaxConcurrency(getResourceDownloadMaxConcurrency());
+        vo.setResourceDownloadLimitKbps(getResourceDownloadLimitKbps());
+        vo.setResourceUploadLimitKbps(getResourceUploadLimitKbps());
+        vo.setResourceSeedTimeSeconds(getResourceSeedTimeSeconds());
+        vo.setResourceCustomTrackers(getResourceCustomTrackers());
+        vo.setResourceNodeProxyHost(getResourceNodeProxyHost());
+        vo.setResourceNodeProxyPort(getResourceNodeProxyPort());
+        vo.setRssProxyHost(getRssProxyHost());
+        vo.setRssProxyPort(getRssProxyPort());
 
         vo.setAuthRegisterEnabled(isRegisterEnabled());
         vo.setRemoteAccessEnabled(isRemoteAccessEnabled());
@@ -205,6 +229,55 @@ public class SiteConfigService {
             saveOrUpdateConfig(DANDAN_APP_SECRET, request.getDandanAppSecret(), "Dandan 应用密钥");
             cachedDandanAppSecret = request.getDandanAppSecret();
         }
+        if (request.getResourceNodeBaseUrl() != null) {
+            saveOrUpdateConfig(RESOURCE_NODE_BASE_URL, request.getResourceNodeBaseUrl(), "资源搜索节点地址");
+        }
+        if (request.getResourceDownloadTempDir() != null) {
+            saveOrUpdateConfig(RESOURCE_DOWNLOAD_TEMP_DIR, request.getResourceDownloadTempDir(), "下载暂存目录");
+        }
+        if (request.getResourceDownloadMaxConcurrency() != null) {
+            saveOrUpdateConfig(
+                RESOURCE_DOWNLOAD_MAX_CONCURRENCY,
+                String.valueOf(Math.max(1, request.getResourceDownloadMaxConcurrency())),
+                "下载并发上限"
+            );
+        }
+        if (request.getResourceDownloadLimitKbps() != null) {
+            saveOrUpdateConfig(
+                RESOURCE_DOWNLOAD_LIMIT_KBPS,
+                String.valueOf(Math.max(0, request.getResourceDownloadLimitKbps())),
+                "下载限速 KB/s"
+            );
+        }
+        if (request.getResourceUploadLimitKbps() != null) {
+            saveOrUpdateConfig(
+                RESOURCE_UPLOAD_LIMIT_KBPS,
+                String.valueOf(Math.max(0, request.getResourceUploadLimitKbps())),
+                "上传限速 KB/s"
+            );
+        }
+        if (request.getResourceSeedTimeSeconds() != null) {
+            saveOrUpdateConfig(
+                RESOURCE_SEED_TIME_SECONDS,
+                String.valueOf(Math.max(0, request.getResourceSeedTimeSeconds())),
+                "下载完成后做种时长（秒）"
+            );
+        }
+        if (request.getResourceCustomTrackers() != null) {
+            saveOrUpdateConfig(RESOURCE_CUSTOM_TRACKERS, request.getResourceCustomTrackers(), "新任务附加 Tracker");
+        }
+        if (request.getResourceNodeProxyHost() != null) {
+            saveOrUpdateConfig(RESOURCE_NODE_PROXY_HOST, request.getResourceNodeProxyHost(), "资源节点请求代理主机");
+        }
+        if (request.getResourceNodeProxyPort() != null) {
+            saveOrUpdateConfig(RESOURCE_NODE_PROXY_PORT, String.valueOf(Math.max(0, request.getResourceNodeProxyPort())), "资源节点请求代理端口");
+        }
+        if (request.getRssProxyHost() != null) {
+            saveOrUpdateConfig(RSS_PROXY_HOST, request.getRssProxyHost(), "RSS 请求代理主机");
+        }
+        if (request.getRssProxyPort() != null) {
+            saveOrUpdateConfig(RSS_PROXY_PORT, String.valueOf(Math.max(0, request.getRssProxyPort())), "RSS 请求代理端口");
+        }
         if (request.getAuthRegisterEnabled() != null) {
             saveOrUpdateConfig(AUTH_REGISTER_ENABLED, String.valueOf(request.getAuthRegisterEnabled()), "是否开放注册");
         }
@@ -277,6 +350,50 @@ public class SiteConfigService {
 
     public int getRegisterDailyLimitPerIp() {
         return getIntConfig(REGISTER_DAILY_LIMIT_PER_IP, 20);
+    }
+
+    public String getResourceNodeBaseUrl() {
+        return getConfigValue(RESOURCE_NODE_BASE_URL);
+    }
+
+    public String getResourceDownloadTempDir() {
+        return getConfigValue(RESOURCE_DOWNLOAD_TEMP_DIR);
+    }
+
+    public int getResourceDownloadMaxConcurrency() {
+        return getIntConfig(RESOURCE_DOWNLOAD_MAX_CONCURRENCY, 2);
+    }
+
+    public int getResourceDownloadLimitKbps() {
+        return getIntConfig(RESOURCE_DOWNLOAD_LIMIT_KBPS, 0);
+    }
+
+    public int getResourceUploadLimitKbps() {
+        return getIntConfig(RESOURCE_UPLOAD_LIMIT_KBPS, 0);
+    }
+
+    public int getResourceSeedTimeSeconds() {
+        return getIntConfig(RESOURCE_SEED_TIME_SECONDS, 0);
+    }
+
+    public String getResourceCustomTrackers() {
+        return getConfigValue(RESOURCE_CUSTOM_TRACKERS);
+    }
+
+    public String getResourceNodeProxyHost() {
+        return getConfigValue(RESOURCE_NODE_PROXY_HOST);
+    }
+
+    public Integer getResourceNodeProxyPort() {
+        return parseInt(getConfigValue(RESOURCE_NODE_PROXY_PORT), 0);
+    }
+
+    public String getRssProxyHost() {
+        return getConfigValue(RSS_PROXY_HOST);
+    }
+
+    public Integer getRssProxyPort() {
+        return parseInt(getConfigValue(RSS_PROXY_PORT), 0);
     }
 
     public SmtpSettings getSmtpSettings() {

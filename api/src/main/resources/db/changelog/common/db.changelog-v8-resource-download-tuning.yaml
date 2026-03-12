@@ -1,0 +1,23 @@
+databaseChangeLog:
+  - changeSet:
+      id: v8-insert-resource-download-max-concurrency
+      author: anilink
+      preConditions:
+        - onFail: MARK_RAN
+      changes:
+        - sql:
+            sql: |
+              INSERT INTO site_config (config_key, config_value, description, created_at, updated_at)
+              VALUES ('resource_download_max_concurrency', '2', '下载并发上限', NOW(), NOW())
+            dbms: h2,postgresql
+
+  - changeSet:
+      id: v8-remove-legacy-jtorrent-config
+      author: anilink
+      preConditions:
+        - onFail: MARK_RAN
+      changes:
+        - sql:
+            sql: |
+              DELETE FROM site_config WHERE config_key = 'resource_jtorrent_command_template'
+            dbms: h2,postgresql

@@ -1,0 +1,11 @@
+databaseChangeLog:
+  - changeSet:
+      id: v12-add-last-fetched-content-to-resource-rss-subscription
+      author: anilink
+      changes:
+        - addColumn:
+            tableName: resource_rss_subscription
+            columns:
+              - column:
+                  name: last_fetched_content
+                  type: CLOB

@@ -363,6 +363,7 @@ onMounted(() => {
                 prepend-inner-icon="mdi-lock"
                 variant="outlined"
                 color="primary"
+                class="mb-4"
               />
             </v-window-item>
 

@@ -18,6 +18,24 @@ databaseChangeLog:
   - include:
       file: common/db.changelog-v6-remote-access.yaml
       relativeToChangelogFile: true
+  - include:
+      file: common/db.changelog-v7-resource-download.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: common/db.changelog-v8-resource-download-tuning.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: common/db.changelog-v9-storage-defaults.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: common/db.changelog-v10-resource-downloader-settings.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: common/db.changelog-v11-rss-subscription-and-proxy.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: common/db.changelog-v12-rss-last-fetched-content.yaml
+      relativeToChangelogFile: true
   # 数据库特定的初始化脚本（如果需要）
   - include:
       file: h2/db.changelog-h2-init.yaml

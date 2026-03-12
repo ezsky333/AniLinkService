@@ -1,0 +1,80 @@
+databaseChangeLog:
+  - changeSet:
+      id: v11-create-resource-rss-subscription-table
+      author: anilink
+      changes:
+        - createTable:
+            tableName: resource_rss_subscription
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: feed_url
+                  type: VARCHAR(2048)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: library_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_resource_rss_subscription_library
+                    references: media_library(id)
+              - column:
+                  name: interval_minutes
+                  type: INT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: enabled
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: last_checked_at
+                  type: TIMESTAMP
+              - column:
+                  name: last_success_at
+                  type: TIMESTAMP
+              - column:
+                  name: last_error
+                  type: CLOB
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: v11-insert-resource-proxy-config
+      author: anilink
+      preConditions:
+        - onFail: MARK_RAN
+      changes:
+        - sql:
+            sql: |
+              INSERT INTO site_config (config_key, config_value, description, created_at, updated_at)
+              VALUES
+                ('resource_node_proxy_host', '', '资源节点请求代理主机', NOW(), NOW()),
+                ('resource_node_proxy_port', '0', '资源节点请求代理端口，0 表示不启用', NOW(), NOW()),
+                ('rss_proxy_host', '', 'RSS 请求代理主机', NOW(), NOW()),
+                ('rss_proxy_port', '0', 'RSS 请求代理端口，0 表示不启用', NOW(), NOW())
+            dbms: h2,postgresql

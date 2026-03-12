@@ -1,0 +1,16 @@
+databaseChangeLog:
+  - changeSet:
+      id: v10-insert-resource-downloader-settings
+      author: anilink
+      preConditions:
+        - onFail: MARK_RAN
+      changes:
+        - sql:
+            sql: |
+              INSERT INTO site_config (config_key, config_value, description, created_at, updated_at)
+              VALUES
+                ('resource_download_limit_kbps', '0', '下载限速 KB/s，0 表示不限速', NOW(), NOW()),
+                ('resource_upload_limit_kbps', '0', '上传限速 KB/s，0 表示不限速', NOW(), NOW()),
+                ('resource_seed_time_seconds', '0', '下载完成后做种时长（秒）', NOW(), NOW()),
+                ('resource_custom_trackers', '', '新任务附加 Tracker（每行一个或逗号分隔）', NOW(), NOW())
+            dbms: h2,postgresql

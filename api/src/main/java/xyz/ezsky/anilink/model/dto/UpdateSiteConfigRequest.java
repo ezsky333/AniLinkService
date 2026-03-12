@@ -29,6 +29,39 @@ public class UpdateSiteConfigRequest {
     @Schema(description = "Dandan 应用密钥", example = "your_app_secret")
     private String dandanAppSecret;
 
+    @Schema(description = "资源搜索节点地址", example = "http://127.0.0.1:9000")
+    private String resourceNodeBaseUrl;
+
+    @Schema(description = "下载暂存目录", example = "D:/AniLinkDownloads/tmp")
+    private String resourceDownloadTempDir;
+
+    @Schema(description = "下载并发上限", example = "2")
+    private Integer resourceDownloadMaxConcurrency;
+
+    @Schema(description = "下载限速 KB/s，0 表示不限速", example = "0")
+    private Integer resourceDownloadLimitKbps;
+
+    @Schema(description = "上传限速 KB/s，0 表示不限速", example = "0")
+    private Integer resourceUploadLimitKbps;
+
+    @Schema(description = "下载完成后的做种时长（秒）", example = "0")
+    private Integer resourceSeedTimeSeconds;
+
+    @Schema(description = "新任务附加 Tracker（每行一个或逗号分隔）", example = "udp://tracker.opentrackr.org:1337/announce")
+    private String resourceCustomTrackers;
+
+    @Schema(description = "资源节点请求代理主机", example = "127.0.0.1")
+    private String resourceNodeProxyHost;
+
+    @Schema(description = "资源节点请求代理端口", example = "7890")
+    private Integer resourceNodeProxyPort;
+
+    @Schema(description = "RSS 请求代理主机", example = "127.0.0.1")
+    private String rssProxyHost;
+
+    @Schema(description = "RSS 请求代理端口", example = "7890")
+    private Integer rssProxyPort;
+
     @Schema(description = "是否开放注册", example = "false")
     private Boolean authRegisterEnabled;
 
