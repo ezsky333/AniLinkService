@@ -8,45 +8,50 @@
 
 以下为当前代码中已经落地的能力：
 
-- 安装向导
-   - 首次安装流程（系统信息检查、站点配置、管理员账号、媒体库配置）
-   - 安装完成后自动进入正常站点路由
-- 认证与权限
-   - 用户登录与获取当前用户信息
-   - 基于 Sa-Token 的鉴权
-   - 管理接口使用 `super-admin` 角色保护
-- 媒体库管理
-   - 添加/删除媒体库
-   - 手动扫描单个或全部媒体库
-   - 服务端目录浏览（用于选择媒体库路径）
-   - 应用启动后自动执行一次全库扫描
+- 安装与初始化
+   - 首次安装向导（系统信息检查、站点配置、管理员账号、媒体库配置）
+   - 安装完成后自动切换到正常站点路由
+- 认证与用户体系
+   - 用户登录、当前用户信息获取
+   - 注册流程（图形验证码 + 邮箱验证码）
+   - 基于 Sa-Token 的鉴权与角色控制（管理接口使用 `super-admin` 保护）
+- 媒体库与扫描
+   - 添加/删除媒体库，手动扫描单库或全库
+   - 服务端目录浏览（选择媒体库路径）
+   - 应用启动自动全库扫描
+   - 目录监听文件新增/修改/删除
 - 媒体文件索引与元数据
-   - 扫描常见视频文件（`mp4/mkv/avi/mov`）
-   - 目录监听文件变更（新增、修改、删除）
-   - 通过 `ffprobe` 提取技术元数据（分辨率、帧率、编码、HDR、时长等）
-   - 计算文件 Hash
-   - 异步元数据队列与队列状态查询
-- 弹弹play匹配与本地化缓存
-   - 按文件信息调用弹弹匹配接口，自动回填 `animeId/episodeId` 等字段
-   - 拉取番剧详情并入库
-   - 下载封面到本地目录并通过静态路径提供访问
-- 动漫库与搜索
-   - 动漫列表分页查询
-   - 关键词搜索
-   - 动漫详情与本地剧集列表
-   - 新番时间表（按周展示）
-- 播放与弹幕
-   - 视频流接口支持 HTTP Range（可拖拽进度播放）
-   - 前端 Artplayer 播放
-   - 弹幕代理接口 `/api/v2/comment/{episodeId}`
-   - 弹幕 30 分钟数据库缓存，支持 `withRelated=true`
-   - 弹弹弹幕格式转换并接入 Artplayer 弹幕插件
+   - 扫描常见视频格式（`mp4/mkv/avi/mov`）
+   - 通过 `ffprobe` 提取技术信息（分辨率、帧率、编码、HDR、时长等）
+   - 文件 Hash 计算
+   - 元数据/匹配异步队列与进度状态查询
+- 动漫匹配与动漫库
+   - 按文件信息调用弹弹匹配接口，自动回填 `animeId/episodeId`
+   - 支持重匹配（自动候选 + 手动搜索）
+   - 拉取番剧详情入库，封面本地缓存与静态访问
+   - 动漫分页、搜索、详情、剧集列表、新番时间表
+- 追番、播放历史与消息通知
+   - 追番增删改查（含按状态筛选）
+   - 播放进度同步与播放历史管理
+   - 站内消息中心（未读统计、标记已读、按类型查询）
+   - 新剧集匹配成功后自动向追番用户推送更新消息
+- 播放、字幕与弹幕
+   - 视频流接口支持 HTTP Range（支持拖拽进度播放）
+   - 前端 Artplayer 播放 + `artplayer-plugin-danmuku`
+   - 弹幕代理 `/api/v2/comment/{episodeId}`，30 分钟数据库缓存，支持 `withRelated=true`
+   - 本地字幕管理：列表、上传、下载、删除、时间偏移、重新扫描
+- 资源搜索与下载
+   - 资源搜索代理（字幕组/类型/关键词）
+   - 磁链下载任务创建、取消、重试、删除、绑定状态查询
+   - 下载任务 SSE 实时进度推送
+   - RSS 订阅下载（增删改查、手动触发、最近抓取内容查看）
+- 远程访问
+   - 远程访问入口与站点级开关控制
+   - 可选令牌访问模式，支持用户远程访问密钥查看与重置
 - 管理后台
-   - 系统信息查看
-   - 站点配置与 Dandan App 配置
-   - 媒体库管理
-   - 视频文件管理（查看详情、编辑番剧信息、删除、批量重新获取元数据）
-   - 动漫库管理（列表、搜索、查看剧集）
+   - 系统信息、服务配置、用户管理
+   - 队列进度、媒体库管理、视频文件管理、字幕管理
+   - 资源搜索下载、RSS 订阅下载、下载任务进度与下载器配置
 
 ## 技术栈
 
@@ -55,6 +60,7 @@
 - 前端：Vue 3, Vite, Vuetify, Vue Router, Axios
 - 播放器：Artplayer + artplayer-plugin-danmuku
 - 媒体分析：FFprobe（容器镜像内已安装 FFmpeg 工具集）
+- BT 下载：jlibtorrent（含 Windows/Linux 平台依赖）
 
 ## 目录结构
 
@@ -131,16 +137,36 @@ docker run -d \
    - `POST /api/init/media-library`
 - 认证
    - `POST /api/auth/login`
+   - `POST /api/auth/register`
+   - `POST /api/auth/send-register-email-code`
    - `POST /api/auth/currentUser`
+- 资源下载
+   - `GET /api/resource-search/list`
+   - `POST /api/resource-search/download`
+   - `GET /api/resource-search/download-tasks`
+   - `GET /api/resource-search/download-tasks/stream`
+   - `GET /api/resource-search/rss-subscriptions`
 - 动漫与弹幕
    - `GET /api/animes`
    - `GET /api/animes/{animeId}/raw-json`
    - `GET /api/animes/{animeId}/episodes`
    - `GET /api/animes/shin/raw-json`
    - `GET /api/v2/comment/{episodeId}?withRelated=true`
+- 用户功能
+   - `GET /api/follows`
+   - `POST /api/play-history/progress`
+   - `GET /api/messages/unread-count`
 - 播放
    - `GET /api/media-files/stream/{id}`
    - `GET /api/media-files/{id}/subtitles`
+- 字幕管理
+   - `GET /api/subtitles`
+   - `POST /api/subtitles/upload`
+   - `PUT /api/subtitles/{id}/offset`
+   - `POST /api/subtitles/rescan/{mediaFileId}`
+- 远程访问
+   - `GET /api/remote-access/credential`
+   - `POST /api/remote-access/credential/regenerate`
 
 ## API 文档
 
@@ -157,6 +183,7 @@ docker run -d \
 - dandanplay 开放平台: https://doc.dandanplay.com/open/
 - Artplayer: https://artplayer.org/
 - artplayer-plugin-danmuku: https://github.com/zhw2590582/ArtPlayer/tree/master/packages/artplayer-plugin-danmuku
+- jlibtorrent: https://github.com/frostwire/frostwire-jlibtorrent
 
 ## 当前待完善
 
