@@ -1,6 +1,30 @@
 <template>
-  <div class="page-wrapper" v-if="loading">
-    <div class="loading">加载中...</div>
+  <div class="page skeleton-page" v-if="loading">
+    <div class="anime-detail-layout">
+      <div class="anime-left-column">
+        <div class="anime-skeleton-card">
+          <v-skeleton-loader type="image, heading, paragraph@2" />
+        </div>
+
+        <div class="anime-skeleton-card">
+          <v-skeleton-loader type="heading, list-item-two-line@6" />
+        </div>
+
+        <div class="anime-skeleton-card">
+          <v-skeleton-loader type="heading, list-item-two-line@3" />
+        </div>
+      </div>
+
+      <div class="anime-sidebar">
+        <div class="anime-skeleton-card">
+          <v-skeleton-loader type="heading, list-item@5" />
+        </div>
+
+        <div class="anime-skeleton-card">
+          <v-skeleton-loader type="heading, image" />
+        </div>
+      </div>
+    </div>
   </div>
   <div class="page-wrapper" v-else-if="error">
     <div class="error">数据加载失败: {{ error }}</div>
@@ -712,6 +736,18 @@ const playEpisode = (ep) => {
   border-radius: 32px;
   overflow: hidden;
   padding: 32px;
+}
+
+.skeleton-page {
+  min-height: 520px;
+}
+
+.anime-skeleton-card {
+  background: #fff;
+  border: 1px solid #efe7de;
+  border-radius: 16px;
+  padding: 14px;
+  margin-bottom: 16px;
 }
 
 /* Detail Layout */
