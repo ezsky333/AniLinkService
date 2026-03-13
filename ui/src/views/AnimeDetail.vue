@@ -30,14 +30,43 @@
           @toggleFollow="toggleFollow"
         />
 
+        <!-- 分集/评论切换：仅当评论区可用时展示 -->
+        <div v-if="showCommentsTab" class="detail-section-tabs">
+          <button
+            class="detail-section-tab"
+            :class="{ active: activeSection === 'episodes' }"
+            @click="activeSection = 'episodes'"
+          >分集</button>
+          <button
+            class="detail-section-tab"
+            :class="{ active: activeSection === 'comments' }"
+            @click="activeSection = 'comments'"
+          >评论区</button>
+        </div>
+
         <!-- 分集区 -->
         <EpisodeListSection
+          v-if="activeSection === 'episodes'"
           :episodes="animeData.episodes"
           :main-count="mainEpisodes.length"
           :total-count="animeData.episodes.length"
           :playable-episode-keys="playableEpisodeKeys"
           @playEpisode="playEpisode"
         />
+
+        <!-- 评论区内容 -->
+        <div v-if="activeSection === 'comments' && bangumiSubjectId" class="detail-comments-section">
+          <p class="comments-source-hint">
+            评论来自
+            <a href="https://bgm.tv/" target="_blank" rel="noopener noreferrer">https://bgm.tv/</a>
+            ，查看原页面：
+            <a :href="bangumiSubjectUrl" target="_blank" rel="noopener noreferrer">{{ bangumiSubjectUrl }}</a>
+          </p>
+          <BangumiComments
+            :subject-id="bangumiSubjectId"
+            @unavailable="commentsAvailable = false; activeSection = 'episodes'"
+          />
+        </div>
 
         <!-- 预告片 -->
         <TrailerCarousel :trailers="animeData.trailers" />
@@ -94,6 +123,7 @@ import TrailerCarousel from '../components/anime/TrailerCarousel.vue';
 import RelatedWorksCarousel from '../components/anime/RelatedWorksCarousel.vue';
 import MetadataCard from '../components/anime/MetadataCard.vue';
 import FooterLinks from '../components/anime/FooterLinks.vue';
+import BangumiComments from '../components/anime/BangumiComments.vue';
 
 // Props
 const props = defineProps({
@@ -117,6 +147,8 @@ const router = useRouter();
 const showResourceDialog = ref(false);
 const selectedResources = ref([]);
 const selectedEpisodeTitle = ref('');
+const activeSection = ref('episodes'); // 'episodes' | 'comments'
+const commentsAvailable = ref(true);
 
 // Fetch Data
 const fetchAnimeData = async () => {
@@ -218,6 +250,8 @@ onMounted(() => {
 watch(() => route.params.animeId, () => {
   closeResourceDialog();
   isSummaryExpanded.value = false;
+  activeSection.value = 'episodes';
+  commentsAvailable.value = true;
   fetchAnimeData();
 });
 
@@ -304,6 +338,23 @@ const copyrightText = computed(() => {
   const meta = animeData.value?.metadata || [];
   return meta.find(m => m.startsWith('Copyright')) || '©山田鐘人・アベツカサ／小学館／「葬送のフリーレン」製作委員会';
 });
+
+const bangumiSubjectId = computed(() => {
+  const url = animeData.value?.bangumiUrl;
+  if (!url) return null;
+  const match = String(url).match(/\/subject\/(\d+)/);
+  return match ? match[1] : null;
+});
+
+const bangumiSubjectUrl = computed(() => {
+  const url = animeData.value?.bangumiUrl;
+  if (url && /\/subject\/\d+/.test(String(url))) {
+    return String(url);
+  }
+  return bangumiSubjectId.value ? `https://bgm.tv/subject/${bangumiSubjectId.value}` : 'https://bgm.tv/';
+});
+
+const showCommentsTab = computed(() => bangumiSubjectId.value !== null && commentsAvailable.value);
 
 // Event Handlers
 const toggleFavorite = () => {
@@ -479,6 +530,61 @@ const playEpisode = (ep) => {
 
 .resource-cancel-btn:hover {
   background: #f9f4ef;
+}
+
+/* Section Tabs */
+.detail-section-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #e5d8cc;
+  padding-bottom: 0;
+}
+
+.detail-section-tab {
+  background: none;
+  border: none;
+  padding: 8px 20px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #8b7e74;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  border-radius: 4px 4px 0 0;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.detail-section-tab:hover {
+  color: #c45d2b;
+}
+
+.detail-section-tab.active {
+  color: #c45d2b;
+  border-bottom-color: #c45d2b;
+  background: none;
+}
+
+.detail-comments-section {
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid #e5d8cc;
+  padding: 16px 20px;
+}
+
+.comments-source-hint {
+  margin: 0 0 12px;
+  font-size: 0.88rem;
+  color: #8b7e74;
+}
+
+.comments-source-hint a {
+  color: #c45d2b;
+  text-decoration: none;
+}
+
+.comments-source-hint a:hover {
+  text-decoration: underline;
 }
 
 /* Responsive */
