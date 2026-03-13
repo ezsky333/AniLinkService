@@ -173,7 +173,7 @@ onMounted(() => {
 }
 
 .poster-image :deep(.v-img__img) {
-  object-fit: contain;
+  object-fit: cover;
   object-position: center top;
 }
 

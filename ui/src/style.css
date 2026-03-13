@@ -15,3 +15,10 @@ html, body {
   width: 100%;
   min-height: 100%;
 }
+
+.v-container {
+  max-width: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  width: 100%;
+}

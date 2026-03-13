@@ -1354,7 +1354,7 @@ body {
 }
 
 .content-wrapper {
-  padding: 24px 16px;
+  padding: 12px 16px;
   width: 100%;
   max-width: 100%;
 }
@@ -1628,9 +1628,6 @@ body {
 
   .nav-menu {
     justify-content: center;
-    min-height: 44px;
-    align-items: center;
-    padding: 4px 0;
     gap: 8px;
   }
 
