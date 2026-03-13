@@ -29,8 +29,8 @@ public class SiteConfigVO {
     @Schema(description = "Dandan 应用 ID", example = "your_app_id")
     private String dandanAppId;
 
-    @Schema(description = "Dandan 应用密钥，返回时会被原样返回（注意安全风险）", example = "your_app_secret")
-    private String dandanAppSecret;
+    @Schema(description = "Dandan 应用密钥是否已配置", example = "true")
+    private Boolean dandanAppSecretConfigured;
 
     @Schema(description = "资源搜索节点地址", example = "http://127.0.0.1:9000")
     private String resourceNodeBaseUrl;

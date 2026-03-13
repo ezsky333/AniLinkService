@@ -34,6 +34,7 @@ const form = ref({
 // Dandan 字段
 form.value.dandanAppId = ''
 form.value.dandanAppSecret = ''
+form.value.dandanAppSecretConfigured = false
 form.value.smtpPasswordConfigured = false
 
 const fetchRoleOptions = async () => {
@@ -60,7 +61,8 @@ const fetchConfig = async () => {
         siteDescription: res.data.data.siteDescription || '',
         siteUrl: res.data.data.siteUrl || '',
         dandanAppId: res.data.data.dandanAppId || '',
-        dandanAppSecret: res.data.data.dandanAppSecret || '',
+        dandanAppSecret: '',
+        dandanAppSecretConfigured: !!res.data.data.dandanAppSecretConfigured,
         authRegisterEnabled: !!res.data.data.authRegisterEnabled,
         remoteAccessEnabled: !!res.data.data.remoteAccessEnabled,
         remoteAccessTokenRequired: !!res.data.data.remoteAccessTokenRequired,
@@ -99,7 +101,7 @@ const saveConfig = async () => {
       siteUrl: form.value.siteUrl
         ,
         dandanAppId: form.value.dandanAppId,
-        dandanAppSecret: form.value.dandanAppSecret,
+        dandanAppSecret: form.value.dandanAppSecret || null,
         authRegisterEnabled: form.value.authRegisterEnabled,
         remoteAccessEnabled: form.value.remoteAccessEnabled,
         remoteAccessTokenRequired: form.value.remoteAccessTokenRequired,
@@ -358,6 +360,8 @@ onMounted(() => {
               />
               <v-text-field
                 v-model="form.dandanAppSecret"
+                :hint="form.dandanAppSecretConfigured ? '已配置密钥，不填则保持不变' : '请输入 Dandan App Secret'"
+                persistent-hint
                 label="Dandan App Secret"
                 type="password"
                 prepend-inner-icon="mdi-lock"

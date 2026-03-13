@@ -92,8 +92,8 @@ public class SiteConfigService {
         // Dandan 配置
         siteConfigRepository.findByConfigKey(DANDAN_APP_ID)
             .ifPresent(config -> vo.setDandanAppId(config.getConfigValue()));
-        siteConfigRepository.findByConfigKey(DANDAN_APP_SECRET)
-            .ifPresent(config -> vo.setDandanAppSecret(config.getConfigValue()));
+        String dandanAppSecret = getConfigValue(DANDAN_APP_SECRET);
+        vo.setDandanAppSecretConfigured(dandanAppSecret != null && !dandanAppSecret.isBlank());
         siteConfigRepository.findByConfigKey(RESOURCE_NODE_BASE_URL)
             .ifPresent(config -> vo.setResourceNodeBaseUrl(config.getConfigValue()));
         siteConfigRepository.findByConfigKey(RESOURCE_DOWNLOAD_TEMP_DIR)
@@ -149,7 +149,7 @@ public class SiteConfigService {
             saveOrUpdateConfig(DANDAN_APP_ID, request.getDandanAppId(), "Dandan 应用 ID");
             cachedDandanAppId = request.getDandanAppId();
         }
-        if (request.getDandanAppSecret() != null) {
+        if (request.getDandanAppSecret() != null && !request.getDandanAppSecret().isBlank()) {
             saveOrUpdateConfig(DANDAN_APP_SECRET, request.getDandanAppSecret(), "Dandan 应用密钥");
             cachedDandanAppSecret = request.getDandanAppSecret();
         }
@@ -225,7 +225,7 @@ public class SiteConfigService {
             saveOrUpdateConfig(DANDAN_APP_ID, request.getDandanAppId(), "Dandan 应用 ID");
             cachedDandanAppId = request.getDandanAppId();
         }
-        if (request.getDandanAppSecret() != null) {
+        if (request.getDandanAppSecret() != null && !request.getDandanAppSecret().isBlank()) {
             saveOrUpdateConfig(DANDAN_APP_SECRET, request.getDandanAppSecret(), "Dandan 应用密钥");
             cachedDandanAppSecret = request.getDandanAppSecret();
         }
