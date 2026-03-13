@@ -290,6 +290,9 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   flex: 1;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .anime-title {
@@ -311,6 +314,7 @@ onMounted(() => {
   font-size: 12px;
   color: #6b5f55;
   line-height: 1.5;
+  word-break: break-word;
 }
 
 .pagination {

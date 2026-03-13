@@ -1608,9 +1608,6 @@ onBeforeUnmount(() => {
 }
 
 /* Main Layout */
-.player-page {
-  padding: 24px 0;
-}
 
 .player-layout {
   max-width: 1400px;
@@ -1721,6 +1718,40 @@ onBeforeUnmount(() => {
 @media (max-width: 768px) {
   .player-actions {
     display: none;
+  }
+
+  /* Artplayer 移动端默认会把左右控件组外扩（负 margin），全屏时需要覆盖并叠加安全区 */
+  .artplayer-container :deep(.art-video-player.art-mobile.art-fullscreen .art-bottom),
+  .artplayer-container :deep(.art-video-player.art-mobile.art-fullscreen-web .art-bottom),
+  .artplayer-container :deep(.art-video-player.art-mobile:fullscreen .art-bottom),
+  .artplayer-container :deep(.art-video-player.art-mobile:-webkit-full-screen .art-bottom) {
+    padding-left: max(12px, env(safe-area-inset-left, 0px));
+    padding-right: max(12px, env(safe-area-inset-right, 0px));
+    padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
+    box-sizing: border-box;
+  }
+
+  .artplayer-container :deep(.art-video-player.art-mobile.art-fullscreen .art-controls-left),
+  .artplayer-container :deep(.art-video-player.art-mobile.art-fullscreen-web .art-controls-left),
+  .artplayer-container :deep(.art-video-player.art-mobile:fullscreen .art-controls-left),
+  .artplayer-container :deep(.art-video-player.art-mobile:-webkit-full-screen .art-controls-left) {
+    margin-left: 0 !important;
+  }
+
+  .artplayer-container :deep(.art-video-player.art-mobile.art-fullscreen .art-controls-right),
+  .artplayer-container :deep(.art-video-player.art-mobile.art-fullscreen-web .art-controls-right),
+  .artplayer-container :deep(.art-video-player.art-mobile:fullscreen .art-controls-right),
+  .artplayer-container :deep(.art-video-player.art-mobile:-webkit-full-screen .art-controls-right) {
+    margin-right: 0 !important;
+  }
+
+  .artplayer-container :deep(.art-video-player.art-mobile.art-fullscreen .art-bottom),
+  .artplayer-container :deep(.art-video-player.art-mobile.art-fullscreen-web .art-bottom),
+  .artplayer-container :deep(.art-video-player.art-mobile:fullscreen .art-bottom),
+  .artplayer-container :deep(.art-video-player.art-mobile:-webkit-full-screen .art-bottom) {
+    padding-left: max(12px, env(safe-area-inset-left, 0px)) !important;
+    padding-right: max(12px, env(safe-area-inset-right, 0px)) !important;
+    padding-bottom: max(10px, env(safe-area-inset-bottom, 0px)) !important;
   }
 }
 
