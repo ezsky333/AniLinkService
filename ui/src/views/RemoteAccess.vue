@@ -8,6 +8,7 @@ const API_BASE = '/api'
 
 const loading = ref(false)
 const regenerating = ref(false)
+const copyingPayload = ref(false)
 const canvasRef = ref(null)
 const credential = ref({
   remoteAccessEnabled: false,
@@ -63,7 +64,7 @@ const drawQrCode = async () => {
       margin: 1,
       color: {
         dark: '#1f2937',
-        light: '#ffffff'
+        light: '#fdfbf9'
       }
     })
   } catch (error) {
@@ -109,6 +110,18 @@ const regenerateToken = async () => {
   }
 }
 
+const copyPayload = async () => {
+  try {
+    copyingPayload.value = true
+    await navigator.clipboard.writeText(qrPayload.value)
+    showAppMessage('二维码原始数据已复制', 'success')
+  } catch (error) {
+    showAppMessage('复制失败，请手动复制', 'error')
+  } finally {
+    copyingPayload.value = false
+  }
+}
+
 watch(qrPayload, () => {
   drawQrCode()
 })
@@ -119,13 +132,13 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="remote-access-page">
-    <v-card class="remote-card" :loading="loading">
-      <v-card-title class="text-h6 d-flex align-center ga-2">
-        <v-icon color="teal-darken-2">mdi-qrcode-scan</v-icon>
+  <div class="remote-access-page unified-page-shell">
+    <v-card class="remote-card unified-panel elevation-2" :loading="loading">
+      <v-card-title class="text-h5 d-flex align-center ga-2 unified-panel-title">
+        <v-icon color="deep-orange-darken-1">mdi-qrcode-scan</v-icon>
         远程访问
       </v-card-title>
-      <v-card-text>
+      <v-card-text class="pa-6">
         <v-alert
           v-if="credential.remoteAccessEnabled === false"
           type="warning"
@@ -135,72 +148,97 @@ onMounted(() => {
           远程访问当前已关闭，API v1 不可用。
         </v-alert>
 
-        <div class="remote-content">
-          <div class="qr-box">
-            <canvas ref="canvasRef" class="qr-canvas"></canvas>
+        <div class="remote-overview">
+          <section class="remote-qr-panel">
+            <div class="panel-caption">
+              <v-icon size="18" color="deep-orange-darken-1">mdi-qrcode</v-icon>
+              连接二维码
+            </div>
+
+            <div class="qr-canvas-wrap">
+              <canvas ref="canvasRef" class="qr-canvas"></canvas>
+            </div>
+
             <div class="qr-caption">扫码导入远程访问信息</div>
-          </div>
+            <div class="qr-hint">建议在同一局域网下使用，连接更稳定。</div>
+          </section>
 
-          <div class="info-box">
-            <v-list density="compact" lines="two" class="info-list">
-              <v-list-item title="主机地址">
-                <template #subtitle>
-                  {{ pageHost }}
-                </template>
-              </v-list-item>
-              <v-list-item title="端口">
-                <template #subtitle>
-                  {{ pagePort }}
-                </template>
-              </v-list-item>
-              <v-list-item title="当前用户">
-                <template #subtitle>
-                  {{ credential.currentUser || '-' }}
-                </template>
-              </v-list-item>
-              <v-list-item title="授权状态">
-                <template #subtitle>
-                  {{ credential.tokenRequired ? '需要授权' : '无需授权' }}
-                </template>
-              </v-list-item>
-              <v-list-item title="访问角色要求">
-                <template #subtitle>
-                  {{ credential.requiredRole || 'user' }}
-                </template>
-              </v-list-item>
-            </v-list>
+          <div class="remote-side-panels">
+            <section class="remote-info-panel">
+              <div class="panel-caption">
+                <v-icon size="18" color="deep-orange-darken-1">mdi-lan-connect</v-icon>
+                连接信息
+              </div>
 
-            <v-text-field
-              v-if="credential.tokenRequired"
-              v-model="credential.remoteAccessToken"
-              label="当前用户远程密钥"
-              variant="outlined"
-              readonly
-              class="mt-3"
-            />
+              <div class="info-list">
+                <div class="info-grid">
+                  <div class="info-item">
+                    <div class="info-label">主机地址</div>
+                    <div class="info-value">{{ pageHost || '-' }}</div>
+                  </div>
+                  <div class="info-item">
+                    <div class="info-label">端口</div>
+                    <div class="info-value">{{ pagePort }}</div>
+                  </div>
+                  <div class="info-item">
+                    <div class="info-label">当前用户</div>
+                    <div class="info-value">{{ credential.currentUser || '-' }}</div>
+                  </div>
+                  <div class="info-item">
+                    <div class="info-label">授权状态</div>
+                    <div class="info-value">{{ credential.tokenRequired ? '需要授权' : '无需授权' }}</div>
+                  </div>
+                  <div class="info-item info-item-wide">
+                    <div class="info-label">访问角色要求</div>
+                    <div class="info-value">{{ credential.requiredRole || 'user' }}</div>
+                  </div>
+                </div>
+              </div>
 
-            <v-btn
-              v-if="credential.tokenRequired"
-              color="deep-orange-darken-1"
-              variant="elevated"
-              prepend-icon="mdi-refresh"
-              :loading="regenerating"
-              :disabled="regenerating"
-              @click="regenerateToken"
-            >
-              重新生成密钥
-            </v-btn>
+              <div v-if="credential.tokenRequired" class="token-section">
+                <v-text-field
+                  v-model="credential.remoteAccessToken"
+                  label="当前用户远程密钥"
+                  variant="outlined"
+                  readonly
+                  hide-details
+                />
+
+                <v-btn
+                  color="deep-orange-darken-1"
+                  variant="elevated"
+                  prepend-icon="mdi-refresh"
+                  :loading="regenerating"
+                  :disabled="regenerating"
+                  @click="regenerateToken"
+                >
+                  重新生成密钥
+                </v-btn>
+              </div>
+            </section>
+
+            <section class="payload-panel">
+              <div class="payload-header">
+                <div class="panel-caption">
+                  <v-icon size="18" color="deep-orange-darken-1">mdi-code-json</v-icon>
+                  二维码原始数据
+                </div>
+                <v-btn
+                  size="small"
+                  variant="tonal"
+                  color="deep-orange-darken-1"
+                  prepend-icon="mdi-content-copy"
+                  :loading="copyingPayload"
+                  :disabled="copyingPayload"
+                  @click="copyPayload"
+                >
+                  复制
+                </v-btn>
+              </div>
+              <pre class="payload-preview">{{ qrPayload }}</pre>
+            </section>
           </div>
         </div>
-
-        <v-expansion-panels class="mt-6">
-          <v-expansion-panel>
-            <v-expansion-panel-title>二维码原始数据</v-expansion-panel-title>
-            <v-expansion-panel-text>
-              <pre class="payload-preview">{{ qrPayload }}</pre>
-            </v-expansion-panel-text>
-          </v-expansion-panel>
-        </v-expansion-panels>
       </v-card-text>
     </v-card>
   </div>
@@ -209,26 +247,74 @@ onMounted(() => {
 <style scoped>
 .remote-access-page {
   width: 100%;
+  min-height: calc(100vh - 140px);
 }
 
 .remote-card {
-  border-radius: 14px;
+  border-radius: 16px;
+  min-height: calc(100vh - 140px);
+  display: flex;
+  flex-direction: column;
 }
 
-.remote-content {
+.remote-overview {
   display: grid;
   grid-template-columns: 280px 1fr;
-  gap: 24px;
+  gap: 22px;
+  align-items: start;
 }
 
-.qr-box {
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 12px;
-  background: #fff;
+.remote-side-panels {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.remote-qr-panel,
+.remote-info-panel,
+.payload-panel {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+.remote-qr-panel {
   display: flex;
   flex-direction: column;
   align-items: center;
+  padding: 0;
+}
+
+.remote-info-panel {
+  min-width: 0;
+  border-left: 1px solid #eadfd4;
+  padding-left: 20px;
+}
+
+.payload-panel {
+  border-top: 1px solid #eadfd4;
+  padding-top: 16px;
+  border-left: 1px solid #eadfd4;
+  padding-left: 20px;
+}
+
+.panel-caption {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #4f4339;
+}
+
+.qr-canvas-wrap {
+  border: 1px solid #e7ddd3;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 8px;
 }
 
 .qr-canvas {
@@ -238,22 +324,75 @@ onMounted(() => {
 
 .qr-caption {
   margin-top: 8px;
-  color: #6b7280;
+  color: #7b6d60;
   font-size: 13px;
 }
 
-.info-box {
-  min-width: 0;
+.qr-hint {
+  margin-top: 4px;
+  color: #968679;
+  font-size: 12px;
 }
 
 .info-list {
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  background: #fff;
+  min-width: 0;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.info-item {
+  border: none;
+  border-bottom: 1px dashed #eadfd4;
+  border-radius: 0;
+  background: transparent;
+  padding: 8px 0;
+}
+
+.info-item-wide {
+  grid-column: 1 / -1;
+}
+
+.info-item:last-child {
+  border-bottom: none;
+}
+
+.info-label {
+  color: #7a6c5f;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.info-value {
+  color: #2f2b28;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.token-section {
+  margin-top: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.payload-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
 }
 
 .payload-preview {
   margin: 0;
+  padding: 12px 0 0;
+  border: none;
+  border-top: 1px dashed #eadfd4;
+  border-radius: 10px;
+  background: transparent;
   white-space: pre-wrap;
   word-break: break-all;
   font-size: 12px;
@@ -261,13 +400,40 @@ onMounted(() => {
 }
 
 @media (max-width: 900px) {
-  .remote-content {
+  .remote-overview {
     grid-template-columns: 1fr;
   }
 
-  .qr-box {
-    width: fit-content;
-    margin: 0 auto;
+  .remote-qr-panel {
+    width: 100%;
+    margin: 0;
+  }
+
+  .remote-info-panel {
+    border-left: none;
+    border-top: 1px solid #eadfd4;
+    padding-left: 0;
+    padding-top: 14px;
+  }
+
+  .payload-panel {
+    border-left: none;
+    padding-left: 0;
+  }
+
+
+@media (max-width: 600px) {
+  .remote-access-page,
+  .remote-card {
+    min-height: calc(100vh - 110px);
+  }
+}
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .info-item-wide {
+    grid-column: auto;
   }
 }
 </style>

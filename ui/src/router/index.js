@@ -46,13 +46,13 @@ const routes = [
       {
         path: 'follows',
         name: 'FollowList',
-        component: () => import('../views/FollowList.vue'),
+        redirect: { path: '/profile', query: { tab: 'follows' } },
         meta: { requiresAuth: true }
       },
       {
         path: 'messages',
         name: 'Messages',
-        component: () => import('../views/Messages.vue'),
+        redirect: { path: '/profile', query: { tab: 'messages' } },
         meta: { requiresAuth: true }
       },
       {

@@ -148,6 +148,9 @@
     <main class="main-content">
       <div class="content-wrapper">
         <router-view />
+        <p v-if="siteConfig?.siteDescription" class="site-description-note">
+          {{ siteConfig.siteDescription }}
+        </p>
       </div>
     </main>
 
@@ -798,12 +801,12 @@ const goToProfile = () => {
 
 const goToFollows = () => {
   userMenuOpen.value = false
-  router.push('/follows')
+  router.push({ path: '/profile', query: { tab: 'follows' } })
 }
 
 const goToMessages = () => {
   userMenuOpen.value = false
-  router.push('/messages')
+  router.push({ path: '/profile', query: { tab: 'messages' } })
 }
 
 const goToAdmin = () => {
@@ -1359,6 +1362,14 @@ body {
   max-width: 100%;
 }
 
+.site-description-note {
+  margin: 20px 0 2px;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: rgba(107, 95, 85, 0.75);
+  text-align: center;
+}
+
 /* Login Modal */
 .login-modal-overlay {
   position: fixed;
@@ -1741,6 +1752,11 @@ body {
 
   .content-wrapper {
     padding: 12px 10px;
+  }
+
+  .site-description-note {
+    margin-top: 16px;
+    font-size: 0.72rem;
   }
 
   .message-btn,

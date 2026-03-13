@@ -16,7 +16,7 @@ const isLoggedIn = computed(() => {
 </script>
 
 <template>
-  <div class="home-container">
+  <div class="home-container unified-page-shell">
     <MyFollowingList :is-logged-in="isLoggedIn" @select-anime="goToAnime" />
     <ShinWeeklySchedule @select-anime="goToAnime" />
   </div>
@@ -25,7 +25,7 @@ const isLoggedIn = computed(() => {
 
 <style scoped>
 .home-container {
-  padding: 24px 0;
+  padding: 0;
 }
 
 .anime-item {

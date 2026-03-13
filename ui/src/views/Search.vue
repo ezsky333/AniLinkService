@@ -123,83 +123,79 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="search-page">
-    <section class="search-header">
-      <h1>动漫搜索</h1>
-      <div class="search-controls">
-        <input
-          v-model="keyword"
-          type="text"
-          placeholder="输入标题关键词"
-          @keyup.enter="search"
-        />
-        <button @click="search">搜索</button>
-      </div>
-      <p class="search-meta" v-if="!loading">
-        共 {{ totalElements }} 条结果
-      </p>
-    </section>
+  <div class="search-page unified-page-shell">
+    <v-card class="elevation-2 unified-panel search-panel">
+      <v-card-title class="text-h5 d-flex align-center justify-space-between unified-panel-title">
+        <div class="d-flex align-center">
+          <i class="mdi mdi-magnify mr-3" style="color: #4b7bec;"></i>
+          发现
+        </div>
+        <span class="search-meta" v-if="!loading">共 {{ totalElements }} 条结果</span>
+      </v-card-title>
 
-    <section v-if="loading" class="state-block">正在加载...</section>
-    <section v-else-if="errorMessage" class="state-block error">{{ errorMessage }}</section>
-    <section v-else-if="!hasResult" class="state-block">没有找到匹配的动漫</section>
-
-    <section v-else class="result-grid">
-      <article
-        v-for="anime in list"
-        :key="anime.id || anime.animeId"
-        class="anime-card"
-        @click="toAnimeDetail(anime.animeId)"
-      >
-        <div class="cover-wrap">
-          <img
-            v-if="anime.imageUrl"
-            :src="anime.imageUrl"
-            :alt="anime.title"
-            loading="lazy"
+      <v-card-text class="pa-6">
+        <div class="search-controls mb-4">
+          <input
+            v-model="keyword"
+            type="text"
+            placeholder="输入标题关键词"
+            @keyup.enter="search"
           />
-          <div v-else class="cover-placeholder">无封面</div>
+          <button @click="search">搜索</button>
         </div>
 
-        <div class="anime-info">
-          <h3 :title="anime.title">{{ anime.title || '未命名动漫' }}</h3>
-          <p class="sub-info">{{ buildAnimeMeta(anime) }}</p>
-        </div>
-      </article>
-    </section>
+        <v-alert v-if="loading" type="info" variant="tonal" class="state-block">正在加载...</v-alert>
+        <v-alert v-else-if="errorMessage" type="error" variant="tonal" class="state-block">{{ errorMessage }}</v-alert>
+        <v-alert v-else-if="!hasResult" type="info" variant="tonal" class="state-block">没有找到匹配的动漫</v-alert>
 
-    <section v-if="!loading && totalPages > 1" class="pagination">
-      <button :disabled="!canPrev" @click="prevPage">上一页</button>
-      <span>第 {{ page }} / {{ totalPages }} 页</span>
-      <button :disabled="!canNext" @click="nextPage">下一页</button>
-    </section>
+        <section v-else class="result-grid">
+          <v-card
+            v-for="anime in list"
+            :key="anime.id || anime.animeId"
+            class="anime-card schedule-card"
+            elevation="1"
+            @click="toAnimeDetail(anime.animeId)"
+          >
+            <div class="poster-wrap">
+              <img
+                v-if="anime.imageUrl"
+                :src="anime.imageUrl"
+                :alt="anime.title"
+                loading="lazy"
+              />
+              <div v-else class="cover-placeholder">无封面</div>
+            </div>
+
+            <div class="anime-info">
+              <h3 class="anime-title" :title="anime.title">{{ anime.title || '未命名动漫' }}</h3>
+              <p class="sub-info">{{ buildAnimeMeta(anime) }}</p>
+            </div>
+          </v-card>
+        </section>
+
+        <section v-if="!loading && totalPages > 1" class="pagination mt-4">
+          <button :disabled="!canPrev" @click="prevPage">上一页</button>
+          <span>第 {{ page }} / {{ totalPages }} 页</span>
+          <button :disabled="!canNext" @click="nextPage">下一页</button>
+        </section>
+      </v-card-text>
+    </v-card>
   </div>
 </template>
 
 <style scoped>
 .search-page {
-  max-width: 1200px;
-  margin: 0 auto;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 18px;
 }
 
-.search-header {
-  background: #fffaf6;
-  border: 1px solid #eadfce;
-  border-radius: 14px;
-  padding: 18px;
-}
-
-.search-header h1 {
-  margin: 0;
-  color: #2e241e;
-  font-size: 1.4rem;
+.search-panel {
+  border-radius: 16px;
 }
 
 .search-controls {
-  margin-top: 12px;
   display: flex;
   gap: 10px;
 }
@@ -234,54 +230,48 @@ onMounted(() => {
 }
 
 .search-meta {
-  margin-top: 10px;
   color: #6b5f55;
   font-size: 0.92rem;
 }
 
 .state-block {
-  background: #fff;
-  border: 1px solid #eadfce;
-  border-radius: 14px;
-  padding: 30px 16px;
-  text-align: center;
-  color: #5b4f45;
-}
-
-.state-block.error {
-  color: #b62020;
+  margin-bottom: 12px;
 }
 
 .result-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
 }
 
 .anime-card {
-  border: 1px solid #eadfce;
-  border-radius: 14px;
-  background: #fff;
-  overflow: hidden;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.schedule-card {
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
 
-.anime-card:hover {
+.schedule-card:hover {
   transform: translateY(-3px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.16) !important;
 }
 
-.cover-wrap {
+.poster-wrap {
   width: 100%;
   aspect-ratio: 3 / 4;
-  background: #f3ece4;
+  background: linear-gradient(180deg, #f3f5f9 0%, #eceff4 100%);
+  overflow: hidden;
 }
 
-.cover-wrap img {
+.poster-wrap img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center top;
   display: block;
 }
 
@@ -296,22 +286,31 @@ onMounted(() => {
 }
 
 .anime-info {
-  padding: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
 }
 
-.anime-info h3 {
+.anime-title {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 14px;
+  font-weight: 600;
   color: #2e241e;
-  white-space: nowrap;
+  line-height: 1.35;
+  min-height: calc(2 * 1.35em);
+  display: -webkit-box;
+  line-clamp: 2;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .sub-info {
-  margin: 6px 0 0;
-  font-size: 0.84rem;
+  margin: auto 0 0;
+  font-size: 12px;
   color: #6b5f55;
+  line-height: 1.5;
 }
 
 .pagination {
@@ -341,6 +340,16 @@ onMounted(() => {
 
   .search-controls button {
     width: 100%;
+  }
+
+  .result-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+
+  .anime-title {
+    font-size: 13px;
+    line-height: 1.3;
+    min-height: calc(2 * 1.3em);
   }
 }
 </style>

@@ -52,7 +52,7 @@ const goToAnime = (animeId) => {
 }
 
 const goToFollowList = () => {
-  router.push('/follows')
+  router.push({ path: '/profile', query: { tab: 'follows' } })
 }
 
 const goToSearch = () => {
@@ -67,10 +67,10 @@ onMounted(() => {
 </script>
 
 <template>
-  <v-card class="elevation-2 mb-6">
-    <v-card-title class="text-h5 bg-grey-lighten-4 d-flex align-center justify-space-between">
+  <v-card class="elevation-2 mb-6 unified-panel">
+    <v-card-title class="text-h5 d-flex align-center justify-space-between unified-panel-title">
       <div class="d-flex align-center">
-        <i class="fa-solid fa-heart mr-3" style="color: #e74c3c;"></i>
+        <i class="mdi mdi-bookmark-multiple mr-3" style="color: #e74c3c;"></i>
         我的追番
       </div>
       <v-btn
@@ -110,7 +110,7 @@ onMounted(() => {
           <div class="poster-wrap">
             <v-img
               :src="anime.imageUrl || 'https://assets.anixplayer.net/image/poster/default.jpg'"
-              :aspect-ratio="2 / 3"
+              :aspect-ratio="3 / 4"
               class="poster-image"
             />
           </div>
@@ -197,6 +197,7 @@ onMounted(() => {
   color: #2e241e;
   margin: 0;
   line-height: 1.35;
+  min-height: calc(2 * 1.35em);
   display: -webkit-box;
   line-clamp: 2;
   -webkit-line-clamp: 2;
@@ -236,6 +237,7 @@ onMounted(() => {
   .anime-title {
     font-size: 13px;
     line-height: 1.3;
+    min-height: calc(2 * 1.3em);
   }
 }
 
