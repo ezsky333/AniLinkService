@@ -1,0 +1,20 @@
+databaseChangeLog:
+  - changeSet:
+      id: v13-add-users-bangumi-binding-columns
+      author: anilink
+      changes:
+        - addColumn:
+            tableName: users
+            columns:
+              - column:
+                  name: bangumi_access_token
+                  type: varchar(255)
+              - column:
+                  name: bangumi_username
+                  type: varchar(100)
+              - column:
+                  name: bangumi_nickname
+                  type: varchar(100)
+              - column:
+                  name: bangumi_user_id
+                  type: bigint

@@ -15,8 +15,9 @@
         <nav class="nav-menu">
           <router-link to="/" class="nav-item" exact-active-class="active">首页</router-link>
           <router-link to="/search" class="nav-item" active-class="active">发现</router-link>
+
           <router-link v-if="isRemoteAccessVisible" to="/remote-access" class="nav-item" active-class="active">远程访问</router-link>
-          <router-link v-if="isLoggedIn" to="/follows" class="nav-item" active-class="active">我的追番</router-link>
+          <router-link v-if="isLoggedIn" to="/profile" class="nav-item" active-class="active">个人中心</router-link>
         </nav>
 
         <!-- 搜索框和用户菜单 -->
@@ -121,7 +122,7 @@
                 </div>
                 <a href="#" @click.prevent="goToProfile" class="dropdown-item">
                   <i class="mdi mdi-account-circle"></i>
-                  <span>观看历史</span>
+                  <span>个人中心</span>
                 </a>
                 <a href="#" @click.prevent="goToFollows" class="dropdown-item">
                   <i class="mdi mdi-bookmark-multiple"></i>
@@ -908,7 +909,7 @@ body {
   display: flex;
   gap: 32px;
   flex: 1;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .nav-item {
@@ -1583,7 +1584,7 @@ body {
     order: 3;
     flex: 0 0 100%;
     width: 100%;
-    justify-content: center;
+    justify-content: flex-start;
     gap: 10px;
     overflow-x: auto;
     white-space: nowrap;
@@ -1626,6 +1627,10 @@ body {
   }
 
   .nav-menu {
+    justify-content: center;
+    min-height: 44px;
+    align-items: center;
+    padding: 4px 0;
     gap: 8px;
   }
 

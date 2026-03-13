@@ -38,4 +38,19 @@ public class UserInfoVO {
      * 是否激活
      */
     private Boolean isActive;
+
+    /**
+     * 是否已绑定 Bangumi 账号
+     */
+    private Boolean bangumiBound;
+
+    /**
+     * 已绑定的 Bangumi 用户名
+     */
+    private String bangumiUsername;
+
+    /**
+     * 已绑定的 Bangumi 昵称
+     */
+    private String bangumiNickname;
 }

@@ -59,6 +59,10 @@ public class UserService {
     public Optional<User> findByEmail(String email) {
         return userRepository.findByEmail(email);
     }
+
+    public Optional<User> findById(Long userId) {
+        return userRepository.findById(userId);
+    }
     
     /**
      * 验证用户登录
@@ -191,6 +195,28 @@ public class UserService {
         return user.getRemoteAccessToken();
     }
 
+    @Transactional
+    public void bindBangumiAccount(Long userId, String accessToken, Long bangumiUserId, String bangumiUsername, String bangumiNickname) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("用户不存在"));
+        user.setBangumiAccessToken(accessToken);
+        user.setBangumiUserId(bangumiUserId);
+        user.setBangumiUsername(bangumiUsername);
+        user.setBangumiNickname(bangumiNickname);
+        userRepository.save(user);
+    }
+
+    @Transactional
+    public void clearBangumiBinding(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("用户不存在"));
+        user.setBangumiAccessToken(null);
+        user.setBangumiUserId(null);
+        user.setBangumiUsername(null);
+        user.setBangumiNickname(null);
+        userRepository.save(user);
+    }
+
     /**
      * 根据用户ID获取用户信息（包含角色代码列表）
      * @param userId 用户ID
@@ -210,6 +236,9 @@ public class UserService {
         userInfoVO.setEmail(user.getEmail());
         userInfoVO.setRoleCodeList(roleCodes);
         userInfoVO.setIsActive(user.getIsActive());
+        userInfoVO.setBangumiBound(user.getBangumiAccessToken() != null && !user.getBangumiAccessToken().isBlank());
+        userInfoVO.setBangumiUsername(user.getBangumiUsername());
+        userInfoVO.setBangumiNickname(user.getBangumiNickname());
 
         return userInfoVO;
     }

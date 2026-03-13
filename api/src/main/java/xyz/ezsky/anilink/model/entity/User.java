@@ -32,6 +32,18 @@ public class User {
 
     @Column(name = "remote_access_token", unique = true, length = 128)
     private String remoteAccessToken;
+
+    @Column(name = "bangumi_access_token", length = 255)
+    private String bangumiAccessToken;
+
+    @Column(name = "bangumi_username", length = 100)
+    private String bangumiUsername;
+
+    @Column(name = "bangumi_nickname", length = 100)
+    private String bangumiNickname;
+
+    @Column(name = "bangumi_user_id")
+    private Long bangumiUserId;
     
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
