@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/ezsky333/AniLinkService/compare/v1.1.0...v1.1.1) (2026-08-07)
+
+
+### Bug Fixes
+
+* 删除 PR 模板文件 ([8a6427f](https://github.com/ezsky333/AniLinkService/commit/8a6427f368860c77f61ee807b349938a6b23b736))
+
 ## [1.1.0](https://github.com/ezsky333/AniLinkService/compare/v1.0.0...v1.1.0) (2026-08-07)
 
 
