@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/ezsky333/AniLinkService/compare/v1.1.1...v1.2.0) (2026-08-07)
+
+
+### Features
+
+* 更新 Docker 发布工作流以支持从发布说明更新包描述 ([3430cf5](https://github.com/ezsky333/AniLinkService/commit/3430cf5bb7f87f952ee9ac9222d6b170033d5bec))
+
 ## [1.1.1](https://github.com/ezsky333/AniLinkService/compare/v1.1.0...v1.1.1) (2026-08-07)
 
 
