@@ -1,10 +1,14 @@
 {
   "packages": {
     ".": {
-      "release-type": "java-yoshi",
+      "release-type": "java",
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true,
       "extra-files": [
+        {
+          "type": "pom",
+          "path": "api/pom.xml"
+        },
         {
           "type": "json",
           "path": "ui/package.json",
